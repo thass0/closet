@@ -1,0 +1,67 @@
+name:                closet
+version:             0.1.0.0
+github:              "d4ckard/closet"
+license:             MIT
+author:              "Thassilo Schulze"
+maintainer:          "thassilo.schulze@proton.me"
+copyright:           "2023 Thassilo Schulze"
+
+extra-source-files:
+- README.md
+- CHANGELOG.md
+
+# Metadata used when publishing your package
+# synopsis:            Closet Blog Generator
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/d4ckard/closet#readme>
+
+default-extensions:
+  - StrictData
+  - OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+- text
+- yaml >= 0.11 && < 0.12
+- record-hasfield  # For record-dot-preprocessor
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+- -F -pgmF=record-dot-preprocessor
+
+library:
+  source-dirs: src
+
+executables:
+  closet-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - closet
+
+tests:
+  closet-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - closet

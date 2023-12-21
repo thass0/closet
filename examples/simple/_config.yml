@@ -1,0 +1,11 @@
+title: "Closet Blog Title"
+email: "you@closet.blog"
+author: "You, hopefully"
+description: "Default Closet Blog"
+baseurl: "https://closet.blog/"
+twitter-username: "none"
+github-username: "none"
+plugins:
+  - "Blah"
+exclude:
+  - "Nothing"
