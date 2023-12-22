@@ -67,3 +67,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - closet
+    - hspec
+    - hspec-discover

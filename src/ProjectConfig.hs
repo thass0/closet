@@ -25,7 +25,7 @@ data ProjectConfig = ProjectConfig
     , plugins :: Maybe [Text]
     , exclude :: Maybe [FilePath]
     }
-    deriving (Show)
+    deriving (Show, Eq)
 
 instance FromJSON ProjectConfig where
     parseJSON (Y.Object y) =

@@ -10,4 +10,3 @@ generate src dest = do
     putStrLn $ "Generating "<> src <> " into " <> dest <> " ..."
     config <- initConfig src configFileName
     print config
-
