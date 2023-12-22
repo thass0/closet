@@ -8,9 +8,11 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [] -> generate "_site"
-        [into] -> generate into
-        moreArgs -> do
-            me <- getProgName
-            putStrLn $ me <> ": too many arguments " <>
-                show moreArgs
+        [] -> generate "." "_site"
+        [src] -> generate src "_site"
+        [src, dest] -> generate src dest
+        excessArgs -> tooManyArguments excessArgs
+
+tooManyArguments :: [String] -> IO ()
+tooManyArguments excessArgs =
+  error $ "Too many arguments " <> show excessArgs

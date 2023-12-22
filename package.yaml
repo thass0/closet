@@ -28,6 +28,8 @@ dependencies:
 - text
 - yaml >= 0.11 && < 0.12
 - record-hasfield  # For record-dot-preprocessor
+- directory
+- filepath
 
 ghc-options:
 - -Wall

@@ -2,10 +2,12 @@ module Lib
     ( generate
     ) where
 
-import qualified ProjectConfig
+import ProjectConfig (configFileName, initConfig)
 
-generate :: FilePath -> IO ()
-generate path = do
-    putStrLn $ "Generating site into " <> path <> " ..."
-    config <- ProjectConfig.readConfig "examples/simple/_config.yml"
+-- | Generate the site in the directory `src` into `dest`.
+generate :: FilePath -> FilePath -> IO ()
+generate src dest = do
+    putStrLn $ "Generating "<> src <> " into " <> dest <> " ..."
+    config <- initConfig src configFileName
     print config
+
