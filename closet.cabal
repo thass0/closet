@@ -27,6 +27,7 @@ library
   exposed-modules:
       Lib
       ProjectConfig
+      Resources
   other-modules:
       Paths_closet
   hs-source-dirs:
@@ -69,6 +70,7 @@ test-suite closet-test
   main-is: Spec.hs
   other-modules:
       ProjectConfigSpec
+      ResourcesSpec
       Paths_closet
   hs-source-dirs:
       test
