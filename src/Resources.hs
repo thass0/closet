@@ -1,7 +1,6 @@
-module Resources where
+module Resources (copyResources, listFilesRecurse) where
 
 import System.Directory
-module Resources (copyResources) where
 
 import System.FilePath
 import Control.Monad
