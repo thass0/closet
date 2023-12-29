@@ -25,6 +25,8 @@ source-repository head
 
 library
   exposed-modules:
+      CanonPath
+      Doc
       Lib
       ProjectConfig
       Resources
@@ -35,13 +37,19 @@ library
   default-extensions:
       StrictData
       OverloadedStrings
+      QuasiQuotes
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -F -pgmF=record-dot-preprocessor
   build-depends:
-      base >=4.7 && <5
+      aeson
+    , base >=4.7 && <5
+    , bytestring
     , directory
     , filepath
+    , megaparsec
+    , raw-strings-qq
     , record-hasfield
     , text
+    , unordered-containers
     , yaml ==0.11.*
   default-language: Haskell2010
 
@@ -54,14 +62,20 @@ executable closet-exe
   default-extensions:
       StrictData
       OverloadedStrings
+      QuasiQuotes
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -F -pgmF=record-dot-preprocessor -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      aeson
+    , base >=4.7 && <5
+    , bytestring
     , closet
     , directory
     , filepath
+    , megaparsec
+    , raw-strings-qq
     , record-hasfield
     , text
+    , unordered-containers
     , yaml ==0.11.*
   default-language: Haskell2010
 
@@ -69,6 +83,7 @@ test-suite closet-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      DocSpec
       ProjectConfigSpec
       ResourcesSpec
       Paths_closet
@@ -77,15 +92,21 @@ test-suite closet-test
   default-extensions:
       StrictData
       OverloadedStrings
+      QuasiQuotes
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -F -pgmF=record-dot-preprocessor -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      aeson
+    , base >=4.7 && <5
+    , bytestring
     , closet
     , directory
     , filepath
     , hspec
     , hspec-discover
+    , megaparsec
+    , raw-strings-qq
     , record-hasfield
     , text
+    , unordered-containers
     , yaml ==0.11.*
   default-language: Haskell2010

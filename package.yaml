@@ -22,14 +22,20 @@ description:         Please see the README on GitHub at <https://github.com/d4ck
 default-extensions:
   - StrictData
   - OverloadedStrings
+  - QuasiQuotes
 
 dependencies:
 - base >= 4.7 && < 5
 - text
 - yaml >= 0.11 && < 0.12
+- bytestring
+- aeson
 - record-hasfield  # For record-dot-preprocessor
 - directory
 - filepath
+- unordered-containers
+- megaparsec
+- raw-strings-qq
 
 ghc-options:
 - -Wall
