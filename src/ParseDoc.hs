@@ -5,6 +5,11 @@ module ParseDoc
   , Stmt (..)
   , Expr (..)
   , ImmExpr (..)
+  , StringyImmExpr (..)
+  , NumberyImmExpr (..)
+  , Var
+  , StringLiteral
+  , Number
   , FilterExpr (..)
   , pDocument
   , Parser
@@ -51,15 +56,75 @@ data Expr = Expr ImmExpr [FilterExpr]
   deriving (Show, Eq)
 
 data ImmExpr
-  = Var [Ident]
-  | StringLiteral Text
-  | Number Int  -- ^ TODO: There are floats and integers in liquid.
+  = ImmVar Var
+  | ImmStringLiteral StringLiteral
+  | ImmNumber Number
   deriving (Show, Eq)
 
+data StringyImmExpr = SImmVar Var | SImmStringLiteral StringLiteral
+  deriving (Show, Eq)
+
+data NumberyImmExpr = NImmVar Var | NImmNumber Number
+  deriving (Show, Eq)
+
+type StringLiteral = Text
+type Number = Int  -- ^ TODO: There are floats and integers in liquid.
+type Var = [Ident]
+
 data FilterExpr
-  = FilterAbs
-  | FilterAppend ImmExpr
-  | FilterAtLeast ImmExpr
+  -- * Numeric filters
+  = FilterPlus NumberyImmExpr
+  | FilterMinus NumberyImmExpr
+  | FilterTimes NumberyImmExpr
+  | FilterDividedBy NumberyImmExpr
+  | FilterModulo NumberyImmExpr
+  | FilterAtLeast NumberyImmExpr
+  | FilterAtMost NumberyImmExpr
+  | FilterAbs
+  | FilterCeil
+  | FilterFloor
+  | FilterRound
+  -- * Array and object filters
+  | FilterAppend StringyImmExpr
+  | FilterConcat Var
+  | FilterFirst
+  | FilterLast
+  | FilterJoin StringyImmExpr
+  | FilterReverse
+  | FilterSortNatural
+  | FilterSort
+  | FilterMap StringyImmExpr
+  | FilterCompact
+  | FilterSum (Maybe StringyImmExpr)
+  | FilterUniq
+  | FilterWhere StringyImmExpr (Maybe StringyImmExpr)
+  -- * String filters
+  | FilterCapitalize
+  | FilterUpcase
+  | FilterDowncase
+  | FilterLStrip
+  | FilterRStrip
+  | FilterPrepend StringyImmExpr
+  | FilterReplace StringyImmExpr StringyImmExpr
+  | FilterReplaceFirst StringyImmExpr StringyImmExpr
+  | FilterRemove StringyImmExpr
+  | FilterRemoveFirst StringyImmExpr
+  | FilterSize
+  | FilterSlice NumberyImmExpr (Maybe NumberyImmExpr)
+  | FilterSplit StringyImmExpr
+  | FilterStrip
+  | FilterStripHtml
+  | FilterStripNewlines
+  | FilterEscape
+  | FilterEscapeOnce
+  | FilterNewlineToBr
+  | FilterTruncate NumberyImmExpr (Maybe StringyImmExpr)
+  | FilterTruncateWords NumberyImmExpr (Maybe StringyImmExpr)
+  | FilterUrlDecode
+  | FilterUrlEncode
+  | FilterDate StringyImmExpr
+  -- * Miscellaneous filters
+  | FilterDefault ImmExpr
   deriving (Show, Eq)
 
 type Ident = Text
@@ -110,6 +175,8 @@ pFrontMatter = do
 
 -- * Expressions
 
+-- ** Variables
+
 pIdent :: Parser Ident
 pIdent = pIdentInner <&> pack
   where
@@ -120,6 +187,11 @@ pIdent = pIdentInner <&> pack
 pIdents :: Parser [Ident]
 pIdents =  sepBy1 pIdent (string ".")
 
+pVar :: Parser Var
+pVar = pIdents
+
+-- ** Numbers
+
 pInteger :: Parser Int
 pInteger = pIntegerInner <?> "number"
   where pIntegerInner = do
@@ -129,6 +201,11 @@ pInteger = pIntegerInner <?> "number"
             Just _ -> pure $ negate value
             Nothing -> pure value
 
+pNumber :: Parser Number
+pNumber = pInteger
+
+-- ** String literals
+
 pStringLiteral :: Parser Text
 pStringLiteral = startChar *> bodyClosed <&> pack
   where
@@ -136,34 +213,109 @@ pStringLiteral = startChar *> bodyClosed <&> pack
     bodyClosed = manyTill L.charLiteral endChar <?> "body of string"
     endChar = char '\"' <?> "end of string"
 
+-- ** Immediate expressions
+
 pImmExpr :: Parser ImmExpr
 pImmExpr = choice $ try <$>
-  [ pIdents <&> Var
-  , pInteger <&> Number
-  , pStringLiteral <&> StringLiteral
+  [ pVar <&> ImmVar
+  , pNumber <&> ImmNumber
+  , pStringLiteral <&> ImmStringLiteral
   ]
 
--- | Parse an immediate expression that is or might turn out to be a string.
-pStringyImmExpr :: Parser ImmExpr
+pStringyImmExpr :: Parser StringyImmExpr
 pStringyImmExpr = choice $ try <$>
-  [ pIdents <&> Var
-  , pStringLiteral <&> StringLiteral
+  [ pVar <&> SImmVar
+  , pStringLiteral <&> SImmStringLiteral
   ]
 
--- | Parse an immediate expression that is or might turn out to be a number.
-pNumberyImmExpr :: Parser ImmExpr
+pNumberyImmExpr :: Parser NumberyImmExpr
 pNumberyImmExpr = choice $ try <$>
-  [ pIdents <&> Var
-  , pInteger <&> Number
+  [ pVar <&> NImmVar
+  , pNumber <&> NImmNumber
   ]
+
 
 pFilterExpr :: Parser FilterExpr
 pFilterExpr = choice $ try <$>
-  [ string "abs" $> FilterAbs
-  , withColon "append" >> pStringyImmExpr <&> FilterAppend
+  [ -- * Numeric filters
+    withColon "plus" >> pNumberyImmExpr <&> FilterPlus
+  , withColon "minus" >> pNumberyImmExpr <&> FilterMinus
+  , withColon "times" >> pNumberyImmExpr <&> FilterTimes
+  , withColon "divided_by" >> pNumberyImmExpr <&> FilterDividedBy
+  , withColon "modulo" >> pNumberyImmExpr <&> FilterModulo
   , withColon "at_least" >> pNumberyImmExpr <&> FilterAtLeast
+  , withColon "at_most" >> pNumberyImmExpr <&> FilterAtMost
+  , string "abs" $> FilterAbs
+  , string "ceil" $> FilterCeil
+  , string "floor" $> FilterFloor
+  , string "round" $> FilterRound
+  -- * Array and object filters
+  , withColon "append" >> pStringyImmExpr <&> FilterAppend
+  , withColon "concat" >> pVar <&> FilterConcat
+  , string "first" $> FilterFirst
+  , string "last" $> FilterLast
+  , withColon "join" >> pStringyImmExpr <&> FilterJoin
+  , string "reverse" $> FilterReverse
+  , string "sort_natural" $> FilterSortNatural
+  , string "sort" $> FilterSort
+  , withColon "map" >> pStringyImmExpr <&> FilterMap
+  , string "compact" $> FilterCompact
+  , withColon "sum" >> pStringyImmExpr <&> Just <&> FilterSum
+  , string "sum" $> FilterSum Nothing
+  , string "uniq" $> FilterUniq
+  , withColon "where" >> pStringWithMaybeString <&> uncurry FilterWhere
+  -- * String filters
+  , string "capitalize" $> FilterCapitalize
+  , string "upcase" $> FilterUpcase
+  , string "downcase" $> FilterDowncase
+  , string "lstrip" $> FilterLStrip
+  , string "rstrip" $> FilterRStrip
+  , withColon "prepend" >> pStringyImmExpr <&> FilterPrepend
+  , withColon "replace_first" >> pTwoStrings <&> uncurry FilterReplaceFirst 
+  , withColon "replace" >> pTwoStrings <&> uncurry FilterReplace
+  , withColon "remove_first" >> pStringyImmExpr <&> FilterRemoveFirst
+  , withColon "remove" >> pStringyImmExpr <&> FilterRemove
+  , string "size" $> FilterSize
+  , withColon "slice" >> pNumberWithMaybeNumber <&> uncurry FilterSlice
+  , withColon "split" >> pStringyImmExpr <&> FilterSplit
+  , string "strip_newlines" $> FilterStripNewlines
+  , string "strip_html" $> FilterStripHtml
+  , string "strip" $> FilterStrip
+  , string "escape_once" $> FilterEscapeOnce
+  , string "escape" $> FilterEscape
+  , string "newline_to_br" $> FilterNewlineToBr
+  , withColon "truncatewords" >> pNumberWithMaybeString <&> uncurry FilterTruncateWords
+  , withColon "truncate" >> pNumberWithMaybeString <&> uncurry FilterTruncate
+  , withColon "date" >> pStringyImmExpr <&> FilterDate
+  , string "url_decode" $> FilterUrlDecode
+  , string "url_encode" $> FilterUrlEncode
+  -- * Miscellaneous filters
+  , withColon "default" >> pImmExpr <&> FilterDefault
   ]
   where
+    pTwoStrings = do
+      first <- pLexeme pStringyImmExpr
+      void $ pLexeme (char ',')
+      second <- pLexeme pStringyImmExpr
+      pure (first, second)
+    pNumberWithMaybeNumber = do
+      first <- pLexeme pNumberyImmExpr
+      second <- optional $ do
+        void $ pLexeme (char ',')
+        pLexeme pNumberyImmExpr
+      pure (first, second)
+    pNumberWithMaybeString = do
+      n <- pLexeme pNumberyImmExpr
+      str <- optional $ do
+        void $ pLexeme (char ',')
+        pLexeme pStringyImmExpr
+      pure (n, str)
+    pStringWithMaybeString = do
+      first <- pLexeme pStringyImmExpr
+      second <- optional $ do
+        void $ pLexeme (char ',')
+        pLexeme pStringyImmExpr
+      pure (first, second)
     withColon s = string s >> pLexeme (char ':')
 
 pExpr :: Parser Expr
