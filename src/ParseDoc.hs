@@ -4,6 +4,8 @@ module ParseDoc
   , Prog (..)
   , Stmt (..)
   , Expr (..)
+  , ImmExpr (..)
+  , FilterExpr (..)
   , pDocument
   , Parser
   ) where
@@ -45,11 +47,19 @@ data Stmt
   | StmtExpress Expr
   deriving (Show, Eq)
 
--- | TODO: Filters
-data Expr
+data Expr = Expr ImmExpr [FilterExpr]
+  deriving (Show, Eq)
+
+data ImmExpr
   = Var [Ident]
   | StringLiteral Text
   | Number Int  -- ^ TODO: There are floats and integers in liquid.
+  deriving (Show, Eq)
+
+data FilterExpr
+  = FilterAbs
+  | FilterAppend ImmExpr
+  | FilterAtLeast ImmExpr
   deriving (Show, Eq)
 
 type Ident = Text
@@ -111,22 +121,56 @@ pIdents :: Parser [Ident]
 pIdents =  sepBy1 pIdent (string ".")
 
 pInteger :: Parser Int
-pInteger = pLexeme L.decimal <?> "number"
+pInteger = pIntegerInner <?> "number"
+  where pIntegerInner = do
+          minusSign <- optional (char '-')
+          value <- pLexeme L.decimal
+          case minusSign of
+            Just _ -> pure $ negate value
+            Nothing -> pure value
 
-pString :: Parser Text
-pString = startChar *> bodyClosed <&> pack
+pStringLiteral :: Parser Text
+pStringLiteral = startChar *> bodyClosed <&> pack
   where
     startChar = char '\"' <?> "start of string"
     bodyClosed = manyTill L.charLiteral endChar <?> "body of string"
     endChar = char '\"' <?> "end of string"
 
-pExpr :: Parser Expr
-pExpr = choice $ try <$>
+pImmExpr :: Parser ImmExpr
+pImmExpr = choice $ try <$>
   [ pIdents <&> Var
   , pInteger <&> Number
-  , pString <&> StringLiteral
+  , pStringLiteral <&> StringLiteral
   ]
 
+-- | Parse an immediate expression that is or might turn out to be a string.
+pStringyImmExpr :: Parser ImmExpr
+pStringyImmExpr = choice $ try <$>
+  [ pIdents <&> Var
+  , pStringLiteral <&> StringLiteral
+  ]
+
+-- | Parse an immediate expression that is or might turn out to be a number.
+pNumberyImmExpr :: Parser ImmExpr
+pNumberyImmExpr = choice $ try <$>
+  [ pIdents <&> Var
+  , pInteger <&> Number
+  ]
+
+pFilterExpr :: Parser FilterExpr
+pFilterExpr = choice $ try <$>
+  [ string "abs" $> FilterAbs
+  , withColon "append" >> pStringyImmExpr <&> FilterAppend
+  , withColon "at_least" >> pNumberyImmExpr <&> FilterAtLeast
+  ]
+  where
+    withColon s = string s >> pLexeme (char ':')
+
+pExpr :: Parser Expr
+pExpr = do
+  imm <- pLexeme pImmExpr
+  filters <- many (pSymbol' "|" >> pLexeme pFilterExpr)
+  pure $ Expr imm filters
 
 -- * Program content
 

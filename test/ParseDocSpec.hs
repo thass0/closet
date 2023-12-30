@@ -3,7 +3,7 @@ module ParseDocSpec (spec) where
 import Test.Hspec
 import Text.Megaparsec
 import Text.RawString.QQ
-import Data.Text
+import Data.Text hiding (replicate)
 import Data.Either (isLeft)
 import qualified Data.Yaml as Y
 import Data.Yaml ((.=))
@@ -26,6 +26,15 @@ docWithEmptyFM p = ParseDoc.Doc
         { docFrontMatter = Y.object []
         , docProg = p
         }
+
+parsedImmExpr :: ParseDoc.ImmExpr -> Either String ParseDoc.Doc
+parsedImmExpr imm = Right
+        (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr imm []))])
+
+parsedExpr :: ParseDoc.ImmExpr -> [ParseDoc.FilterExpr] -> Either String ParseDoc.Doc
+parsedExpr imm f = Right
+        (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr imm f))])
+
 
 -- * Specs
 
@@ -96,22 +105,44 @@ statement :: Spec
 statement = do
     describe "Parse statements" $ do
         expressStatement
+        filteredStatement
 
 expressStatement :: Spec
 expressStatement = do
     describe "Express statement" $ do
         it "Simple express statement" $ do
-            let parsedExpr e = Right (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress e)])
             runDocParse "{{ blah.x }}" `shouldBe`
-                    parsedExpr (ParseDoc.Var ["blah", "x"])
+                    parsedImmExpr (ParseDoc.Var ["blah", "x"])
             runDocParse "{{ blah.x.y.hello.world }}" `shouldBe`
-                    parsedExpr (ParseDoc.Var ["blah", "x", "y", "hello", "world"])
+                    parsedImmExpr (ParseDoc.Var ["blah", "x", "y", "hello", "world"])
             runDocParse "{{ \"Hello, world!\" }}" `shouldBe`
-                    parsedExpr (ParseDoc.StringLiteral "Hello, world!")
+                    parsedImmExpr (ParseDoc.StringLiteral "Hello, world!")
             runDocParse "{{ 543 }}" `shouldBe`
-                    parsedExpr (ParseDoc.Number 543)
+                    parsedImmExpr (ParseDoc.Number 543)
+            runDocParse "{{ -61 }}" `shouldBe`
+                    parsedImmExpr (ParseDoc.Number (-61))
+            runDocParse "{{blah}}" `shouldBe`
+                    parsedImmExpr (ParseDoc.Var ["blah"])
         it "Invalid express statement"$ do
             runDocParse "{{ blah!x }}" `shouldSatisfy` isLeft
             runDocParse "{{ blah.x. }}" `shouldSatisfy` isLeft
             runDocParse "{{ blah * 91 }}" `shouldSatisfy` isLeft
             runDocParse "{{ 514blah }}" `shouldSatisfy` isLeft
+
+filteredStatement :: Spec
+filteredStatement = do
+    describe "Filtered statement" $ do
+        it "'abs' filter" $ do
+            runDocParse "{{ -32 | abs }}" `shouldBe`
+                    parsedExpr (ParseDoc.Number (-32)) [ParseDoc.FilterAbs]
+            runDocParse "{{ -32 | abs | abs|abs|abs  | abs}}" `shouldBe`
+                    parsedExpr (ParseDoc.Number (-32)) (replicate 5 ParseDoc.FilterAbs)
+        it "'append' filter" $ do
+            runDocParse "{{ \"Hello, \" | append: \"World!\" }}" `shouldBe`
+                    parsedExpr (ParseDoc.StringLiteral "Hello, ")
+                               [ParseDoc.FilterAppend (ParseDoc.StringLiteral "World!")]
+            runDocParse "{{ \"Blah\" | append: 91 }}" `shouldSatisfy` isLeft
+        it "'at_least' filter" $ do
+            runDocParse "{{ 5 | at_least: 19 }}" `shouldBe`
+                    parsedExpr (ParseDoc.Number 5) [ParseDoc.FilterAtLeast (ParseDoc.Number 19)]
+            runDocParse "{{ 19 | at_least: \"Blah\" }}" `shouldSatisfy` isLeft
