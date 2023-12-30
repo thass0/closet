@@ -26,8 +26,8 @@ source-repository head
 library
   exposed-modules:
       CanonPath
-      Doc
       Lib
+      ParseDoc
       ProjectConfig
       Resources
   other-modules:
@@ -83,7 +83,7 @@ test-suite closet-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      DocSpec
+      ParseDocSpec
       ProjectConfigSpec
       ResourcesSpec
       Paths_closet

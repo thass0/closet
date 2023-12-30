@@ -1,4 +1,4 @@
-module DocSpec (spec) where
+module ParseDocSpec (spec) where
 
 import Test.Hspec
 import Text.Megaparsec
@@ -7,23 +7,22 @@ import Data.Text
 import Data.Either (isLeft)
 import qualified Data.Yaml as Y
 import Data.Yaml ((.=))
-import qualified Doc
-import qualified Doc
+import qualified ParseDoc
 
 
 -- * Helpers
 
-runTestParse :: Doc.Parser a -> Text -> Either String a
+runTestParse :: ParseDoc.Parser a -> Text -> Either String a
 runTestParse parser input =
   case runParser parser "<in>" input of
     Right x -> Right x
     Left err -> Left (errorBundlePretty err)
 
-runDocParse :: Text -> Either String Doc.Doc
-runDocParse = runTestParse Doc.pDocument
+runDocParse :: Text -> Either String ParseDoc.Doc
+runDocParse = runTestParse ParseDoc.pDocument
 
-docWithEmptyFM :: [Doc.Prog] -> Doc.Doc
-docWithEmptyFM p = Doc.Doc
+docWithEmptyFM :: [ParseDoc.Prog] -> ParseDoc.Doc
+docWithEmptyFM p = ParseDoc.Doc
         { docFrontMatter = Y.object []
         , docProg = p
         }
@@ -39,7 +38,7 @@ spec = do
 frontMatter :: Spec
 frontMatter = do
     describe "Parse front matter" $ do
-        it "simple front matter" $ do
+        it "Simple front matter" $ do
             let input = [r|
 ---
 name: "This is my name"
@@ -50,40 +49,40 @@ children:
     - Child3
 ---
 This is the content of this page!|]
-            runDocParse input `shouldBe` (Right $ Doc.Doc
+            runDocParse input `shouldBe` (Right $ ParseDoc.Doc
                 { docFrontMatter = Y.object
                     [ "name" .= ("This is my name" :: Text)
                     , "age" .= (41 :: Int)
                     , "children" .= Y.array [ "Child1", "Child2", "Child3" ]
                     ]
-                , docProg = [ Doc.LiteralContent "This is the content of this page!" ]
+                , docProg = [ ParseDoc.LiteralContent "This is the content of this page!" ]
                 })
 
-        it "allow --- inside the front matter" $ do
+        it "Allow \"---\" inside the front matter" $ do
             let input = [r|
 ---
 title: "Blah --- my personal blog about Blah!"
 ---
 Blah is the best filler word possible.|] 
-            runDocParse input `shouldBe` (Right $ Doc.Doc
+            runDocParse input `shouldBe` (Right $ ParseDoc.Doc
                 { docFrontMatter = Y.object
                     [ "title" .= ("Blah --- my personal blog about Blah!" :: Text) ]
-                , docProg = [ Doc.LiteralContent "Blah is the best filler word possible." ]
+                , docProg = [ ParseDoc.LiteralContent "Blah is the best filler word possible." ]
                 })
         
-        it  "closing --- must be at beginning of line" $ do
+        it  "Closing \"---\" must be at beginning of line" $ do
             let input1 = "---\r\ntitle: My blog ---\r\n" 
             runDocParse input1 `shouldSatisfy` isLeft
             let input2Win = "---\r\ntitle: My blog\r\n---\r\n"
             let input2Unix = "---\ntitle: My blog\n---\n"
-            let input2Doc = Doc.Doc
+            let input2Doc = ParseDoc.Doc
                     { docFrontMatter = Y.object [ "title" .= ("My blog" :: Text) ]
-                    , docProg = [ Doc.LiteralContent "" ]
+                    , docProg = [ ParseDoc.LiteralContent "" ]
                     }
             runDocParse input2Win `shouldBe` Right input2Doc
             runDocParse input2Unix `shouldBe` Right input2Doc
         
-        it "commit to front matter after a single ---" $ do
+        it "Commit to front matter after a single \"---\"" $ do
             -- If the file contains a valid front matter start, the parser may not
             -- fall back to parsing this part of the file as normal file content.
             -- If the front matter that follows is invalid, the parser must fail entirely.
@@ -95,23 +94,23 @@ Blah is the best filler word possible.|]
 
 statement :: Spec
 statement = do
-    describe "parse statements" $ do
+    describe "Parse statements" $ do
         expressStatement
 
 expressStatement :: Spec
 expressStatement = do
     describe "Express statement" $ do
-        it "simple express statement" $ do
-            let parsedExpr e = Right (docWithEmptyFM [Doc.Stmt (Doc.StmtExpress e)])
+        it "Simple express statement" $ do
+            let parsedExpr e = Right (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress e)])
             runDocParse "{{ blah.x }}" `shouldBe`
-                    parsedExpr (Doc.Var ["blah", "x"])
+                    parsedExpr (ParseDoc.Var ["blah", "x"])
             runDocParse "{{ blah.x.y.hello.world }}" `shouldBe`
-                    parsedExpr (Doc.Var ["blah", "x", "y", "hello", "world"])
+                    parsedExpr (ParseDoc.Var ["blah", "x", "y", "hello", "world"])
             runDocParse "{{ \"Hello, world!\" }}" `shouldBe`
-                    parsedExpr (Doc.StringLiteral "Hello, world!")
+                    parsedExpr (ParseDoc.StringLiteral "Hello, world!")
             runDocParse "{{ 543 }}" `shouldBe`
-                    parsedExpr (Doc.Number 543)
-        it "invalid express statement"$ do
+                    parsedExpr (ParseDoc.Number 543)
+        it "Invalid express statement"$ do
             runDocParse "{{ blah!x }}" `shouldSatisfy` isLeft
             runDocParse "{{ blah.x. }}" `shouldSatisfy` isLeft
             runDocParse "{{ blah * 91 }}" `shouldSatisfy` isLeft

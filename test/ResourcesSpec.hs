@@ -10,7 +10,7 @@ import Resources
 spec :: Spec
 spec = do
   describe "Copy resources files" $ do
-    it "simple example" $ do
+    it "Simple directory" $ do
       tmp <- getTemporaryDirectory
       let testDir = tmp </> "simple-example"
       cleanupDir testDir

@@ -1,4 +1,4 @@
-module Doc
+module ParseDoc
   ( Doc (..)
   , FrontMatter
   , Prog (..)
