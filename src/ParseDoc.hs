@@ -1,7 +1,7 @@
 module ParseDoc
   ( Doc (..)
   , FrontMatter
-  , Prog (..)
+  , Block (..)
   , Stmt (..)
   , Expr (..)
   , ImmExpr (..)
@@ -29,19 +29,19 @@ import Data.Maybe (fromMaybe)
 
 data Doc = Doc
   { docFrontMatter :: FrontMatter  -- ^ Front matter of the document.
-  , docProg :: [Prog]  -- ^ Program to generate the document.
+  , docBlocks :: [Block]  -- ^ Program to generate the document.
   }
   deriving (Show, Eq)
 
 type FrontMatter = Y.Value
 
-data Prog
+data Block
   = Stmt Stmt
   | LiteralContent Text
   deriving (Show, Eq)
 
 data Stmt
-  = StmtIf
+  = StmtIf ImmExpr [Block] (Maybe [Block])  -- ^ Predicate Consequent Alternative
   | StmtFor
   | StmtAssign
   | StmtUnless
@@ -139,10 +139,6 @@ spaceConsumer = L.space space1 empty empty
 pLexeme :: Parser a -> Parser a
 pLexeme = L.lexeme spaceConsumer
 
--- | Consume any white space in the input.
-pSpace :: Parser ()
-pSpace = pLexeme space
-
 -- | Parse the given symbol. It must be followed by one or
 --   more white space characters.
 pSymbol :: Text -> Parser Text
@@ -159,6 +155,9 @@ pSymbol' = L.symbol spaceConsumer
 -- | Accept any character. Used together with @manyTill@.
 pAnything :: Parser Char
 pAnything = satisfy (const True)
+
+pInStmt :: Text -> Parser a -> Text -> Parser a
+pInStmt open x close = (string open >> space) *> x <* (space >> string close)
 
 
 -- * Front Matter
@@ -324,10 +323,25 @@ pExpr = do
   filters <- many (pSymbol' "|" >> pLexeme pFilterExpr)
   pure $ Expr imm filters
 
--- * Program content
+-- * Statements
+
+pIfStmt :: Parser Stmt
+pIfStmt = do
+  -- TODO: What about {%- -%}?
+  -- TODO: Logical operator (==, and, etc.)
+  predicate <- pInStmt "{%" (pSymbol "if" >> pImmExpr) "%}"
+  consequent <- many (try pBlock)
+  alternative <- optional . try $ do
+    void $ pInStmt "{%" (string "else") "%}"
+    many (try pBlock)
+  void $ pInStmt "{%" (string "endif") "%}"
+  pure $ StmtIf predicate consequent alternative
 
 pStmt :: Parser Stmt
-pStmt = between (string "{{" >> pSpace) (pSpace >> string "}}") (pExpr <&> StmtExpress)
+pStmt = choice  -- Note that there is no try here.
+  [ pInStmt "{{" (pExpr <&> StmtExpress) "}}"
+  , lookAhead (pSymbol' "{%" >> pSymbol "if") *> pIfStmt
+  ]
 
 stmtLookAhead :: Parser Text
 stmtLookAhead = lookAhead $ choice (string <$> ["{{", "{%", "{{-", "{%-"])
@@ -337,22 +351,22 @@ pLiteralContent = someTill pAnything endOfContent <&> pack
   where
     endOfContent = (stmtLookAhead $> ()) <|> eof
 
-pProgram :: Parser Prog
-pProgram = choice
+pBlock :: Parser Block
+pBlock = choice
   [ stmtLookAhead >> pStmt <&> Stmt
   , pLiteralContent <&> LiteralContent
   ]
 
+-- * Document
+
 pDocument :: Parser Doc
 pDocument = do
-  -- Consume initial space once. All other white space is
-  -- picked up by @pSymbol@ and @pLexeme@.
-  void Text.Megaparsec.Char.space
   -- Parse an optional front matter. If @---@ is found, we commit
   -- to parsing the front matter and don't fall back.
   fm <- optional $ do
-    void $ lookAhead (pSymbol "---")
+    void $ lookAhead (space >> pSymbol "---")
+    void space
     pFrontMatter
-  prog' <- many pProgram
-  let prog = if null prog' then [LiteralContent ""] else prog'
-  pure $ Doc (fromMaybe (Y.object []) fm) prog
+  blocks' <- many pBlock
+  let blocks = if null blocks' then [LiteralContent ""] else blocks'
+  pure $ Doc (fromMaybe (Y.object []) fm) blocks

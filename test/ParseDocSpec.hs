@@ -21,10 +21,10 @@ runTestParse parser input =
 runDocParse :: Text -> Either String ParseDoc.Doc
 runDocParse = runTestParse ParseDoc.pDocument
 
-docWithEmptyFM :: [ParseDoc.Prog] -> ParseDoc.Doc
+docWithEmptyFM :: [ParseDoc.Block] -> ParseDoc.Doc
 docWithEmptyFM p = ParseDoc.Doc
         { docFrontMatter = Y.object []
-        , docProg = p
+        , docBlocks = p
         }
 
 parsedImmExpr :: ParseDoc.ImmExpr -> Either String ParseDoc.Doc
@@ -34,6 +34,14 @@ parsedImmExpr imm = Right
 parsedExpr :: ParseDoc.ImmExpr -> [ParseDoc.FilterExpr] -> Either String ParseDoc.Doc
 parsedExpr imm f = Right
         (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr imm f))])
+
+parsedIfStmt
+        :: ParseDoc.ImmExpr
+        -> [ParseDoc.Block]
+        -> (Maybe [ParseDoc.Block])
+        -> Either String ParseDoc.Doc
+parsedIfStmt predicate consequent alternative = Right
+        (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtIf predicate consequent alternative)])
 
 
 -- * Specs
@@ -64,7 +72,7 @@ This is the content of this page!|]
                     , "age" .= (41 :: Int)
                     , "children" .= Y.array [ "Child1", "Child2", "Child3" ]
                     ]
-                , docProg = [ ParseDoc.LiteralContent "This is the content of this page!" ]
+                , docBlocks = [ ParseDoc.LiteralContent "This is the content of this page!" ]
                 })
 
         it "Allow \"---\" inside the front matter" $ do
@@ -76,7 +84,7 @@ Blah is the best filler word possible.|]
             runDocParse input `shouldBe` (Right $ ParseDoc.Doc
                 { docFrontMatter = Y.object
                     [ "title" .= ("Blah --- my personal blog about Blah!" :: Text) ]
-                , docProg = [ ParseDoc.LiteralContent "Blah is the best filler word possible." ]
+                , docBlocks = [ ParseDoc.LiteralContent "Blah is the best filler word possible." ]
                 })
         
         it  "Closing \"---\" must be at beginning of line" $ do
@@ -86,7 +94,7 @@ Blah is the best filler word possible.|]
             let input2Unix = "---\ntitle: My blog\n---\n"
             let input2Doc = ParseDoc.Doc
                     { docFrontMatter = Y.object [ "title" .= ("My blog" :: Text) ]
-                    , docProg = [ ParseDoc.LiteralContent "" ]
+                    , docBlocks = [ ParseDoc.LiteralContent "" ]
                     }
             runDocParse input2Win `shouldBe` Right input2Doc
             runDocParse input2Unix `shouldBe` Right input2Doc
@@ -106,6 +114,7 @@ statement = do
     describe "Parse statements" $ do
         expressStatement
         filteredStatement
+        ifStatement
 
 expressStatement :: Spec
 expressStatement = do
@@ -241,3 +250,53 @@ filteredStatement = do
         describe "Miscellaneous filters" $ do
             it "'default'" $ "default: site.title" `filterShouldBe`
                     ParseDoc.FilterDefault (ParseDoc.ImmVar ["site", "title"])
+
+ifStatement :: Spec
+ifStatement = do
+        describe "if statement" $ do
+                it "simple if statement" $ do
+                        let input = [r|{% if say_my_name %}
+Heisenberg
+{% else %}
+Mr. White
+{% endif %}|]
+                        runDocParse input `shouldBe`
+                                parsedIfStmt (ParseDoc.ImmVar ["say_my_name"])
+                                            [ParseDoc.LiteralContent "\nHeisenberg\n"]
+                                            (Just [ParseDoc.LiteralContent "\nMr. White\n"])
+                it "nested if statements" $ do
+                        let input = [r|{% if blah %}
+{% if blah.x %}
+Foo
+{% else %}
+Bar
+{% endif %}
+{% else %}
+Baz
+{% endif %}|]
+                        runDocParse input `shouldBe`
+                                parsedIfStmt (ParseDoc.ImmVar ["blah"])
+                                             [ ParseDoc.LiteralContent "\n"
+                                             , ParseDoc.Stmt (ParseDoc.StmtIf
+                                                                (ParseDoc.ImmVar ["blah", "x"])
+                                                                [ParseDoc.LiteralContent "\nFoo\n"]
+                                                                (Just [ParseDoc.LiteralContent "\nBar\n"]))
+                                             , ParseDoc.LiteralContent "\n"]
+                                             (Just [ParseDoc.LiteralContent "\nBaz\n"])
+                        let input2 = "{%if a%}{%if b%}{%if c%}Foo{%else%}Bar{%endif%}{%else%}Baz{%endif%}{%else%}Blah{%endif%}"
+                        runDocParse input2 `shouldBe`
+                                parsedIfStmt (ParseDoc.ImmVar ["a"])
+                                             [ ParseDoc.Stmt (ParseDoc.StmtIf
+                                                                (ParseDoc.ImmVar ["b"])
+                                                                [ ParseDoc.Stmt (ParseDoc.StmtIf
+                                                                                        (ParseDoc.ImmVar ["c"])
+                                                                                        [ParseDoc.LiteralContent "Foo"]
+                                                                                        (Just [ParseDoc.LiteralContent "Bar"]))]
+                                                                (Just [ParseDoc.LiteralContent "Baz"]))]
+                                             (Just [ParseDoc.LiteralContent "Blah"]) 
+                it "if statement without alternative" $ do
+                        let input = "{% if 512 %}I love powers of two!{% endif %}"
+                        runDocParse input `shouldBe`
+                                parsedIfStmt (ParseDoc.ImmNumber 512)
+                                             [ParseDoc.LiteralContent "I love powers of two!"]
+                                             Nothing
