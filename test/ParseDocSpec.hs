@@ -2,8 +2,8 @@ module ParseDocSpec (spec) where
 
 import Test.Hspec
 import Text.Megaparsec
-import Text.RawString.QQ
-import Data.Text hiding (replicate)
+import Text.RawString.QQ (r)
+import Data.Text (Text)
 import Data.Either (isLeft)
 import qualified Data.Yaml as Y
 import Data.Yaml ((.=))
@@ -136,22 +136,22 @@ filteredStatement = do
                                                     parsedExpr (ParseDoc.ImmVar ["x"]) [fil]
         describe "Numeric filters" $ do
             it "'plus'" $ "plus: 4891" `filterShouldBe`
-                    (ParseDoc.FilterPlus (ParseDoc.NImmNumber 4891))
+                    ParseDoc.FilterPlus (ParseDoc.NImmNumber 4891)
             it "'minus'" $ "minus: 51" `filterShouldBe`
-                    (ParseDoc.FilterMinus (ParseDoc.NImmNumber 51))
+                    ParseDoc.FilterMinus (ParseDoc.NImmNumber 51)
             it "'times'" $ "times: -642" `filterShouldBe`
-                    (ParseDoc.FilterTimes (ParseDoc.NImmNumber (-642)))
+                    ParseDoc.FilterTimes (ParseDoc.NImmNumber (-642))
             it "'divided_by'" $ "divided_by: y" `filterShouldBe`
-                    (ParseDoc.FilterDividedBy (ParseDoc.NImmVar ["y"]))
+                    ParseDoc.FilterDividedBy (ParseDoc.NImmVar ["y"])
             it "'modulo'" $ "modulo: site.x" `filterShouldBe`
-                    (ParseDoc.FilterModulo (ParseDoc.NImmVar ["site", "x"]))
+                    ParseDoc.FilterModulo (ParseDoc.NImmVar ["site", "x"])
             it "'at_least'" $ do
                 "at_least: 19" `filterShouldBe`
-                        (ParseDoc.FilterAtLeast (ParseDoc.NImmNumber 19))
+                        ParseDoc.FilterAtLeast (ParseDoc.NImmNumber 19)
                 runDocParse "{{ 19 | at_least: \"Blah\" }}" `shouldSatisfy` isLeft
             it "'at_most'" $ do
                 "at_most: 19" `filterShouldBe`
-                        (ParseDoc.FilterAtMost (ParseDoc.NImmNumber 19))
+                        ParseDoc.FilterAtMost (ParseDoc.NImmNumber 19)
                 runDocParse "{{ 19 | at_most: \"Blah\" }}" `shouldSatisfy` isLeft
             it "'abs'" $ do
                 "abs" `filterShouldBe` ParseDoc.FilterAbs
@@ -164,30 +164,30 @@ filteredStatement = do
         describe "Array and object filters" $ do
             it "'append'" $ do
                 "append: \"World!\"" `filterShouldBe`
-                        (ParseDoc.FilterAppend (ParseDoc.SImmStringLiteral "World!"))
+                        ParseDoc.FilterAppend (ParseDoc.SImmStringLiteral "World!")
                 runDocParse "{{ \"Blah\" | append: 91 }}" `shouldSatisfy` isLeft
-            it "'concat'" $ "concat: wowow" `filterShouldBe` (ParseDoc.FilterConcat ["wowow"])
+            it "'concat'" $ "concat: wowow" `filterShouldBe` ParseDoc.FilterConcat ["wowow"]
             it "'first'" $ "first" `filterShouldBe` ParseDoc.FilterFirst
             it "'last'" $ "last" `filterShouldBe` ParseDoc.FilterLast
             it "'join'" $ "join: blah" `filterShouldBe`
-                    (ParseDoc.FilterJoin (ParseDoc.SImmVar ["blah"]))
+                    ParseDoc.FilterJoin (ParseDoc.SImmVar ["blah"])
             it "'reverse'" $ "reverse" `filterShouldBe` ParseDoc.FilterReverse
             it "'sort'" $ "sort" `filterShouldBe` ParseDoc.FilterSort
             it "'sort_natural'" $ "sort_natural" `filterShouldBe` ParseDoc.FilterSortNatural
             it "'map'" $ "map: \"blah\"" `filterShouldBe`
-                    (ParseDoc.FilterMap (ParseDoc.SImmStringLiteral "blah"))
+                    ParseDoc.FilterMap (ParseDoc.SImmStringLiteral "blah")
             it "'compact'" $ "compact" `filterShouldBe` ParseDoc.FilterCompact
             it "'sum'" $ do
-                "sum" `filterShouldBe` (ParseDoc.FilterSum Nothing)
+                "sum" `filterShouldBe` ParseDoc.FilterSum Nothing
                 "sum: \"category\"" `filterShouldBe`
-                        (ParseDoc.FilterSum (Just (ParseDoc.SImmStringLiteral "category")))
+                        ParseDoc.FilterSum (Just (ParseDoc.SImmStringLiteral "category"))
             it "'uniq'" $ "uniq" `filterShouldBe` ParseDoc.FilterUniq
             it "'where'" $ do
                 "where: \"x\"" `filterShouldBe`
-                        (ParseDoc.FilterWhere (ParseDoc.SImmStringLiteral "x") Nothing)
+                        ParseDoc.FilterWhere (ParseDoc.SImmStringLiteral "x") Nothing
                 "where: blah, foo" `filterShouldBe`
-                        (ParseDoc.FilterWhere (ParseDoc.SImmVar ["blah"])
-                                            (Just (ParseDoc.SImmVar ["foo"])))
+                        ParseDoc.FilterWhere (ParseDoc.SImmVar ["blah"])
+                                            (Just (ParseDoc.SImmVar ["foo"]))
 
         describe "String filters" $ do
             it "'capitalize'" $ "capitalize" `filterShouldBe` ParseDoc.FilterCapitalize
@@ -196,25 +196,25 @@ filteredStatement = do
             it "'lstrip'" $ "lstrip" `filterShouldBe` ParseDoc.FilterLStrip
             it "'rstrip'" $ "rstrip"  `filterShouldBe` ParseDoc.FilterRStrip
             it "'prepend'" $ "prepend: \"blah\"" `filterShouldBe`
-                    (ParseDoc.FilterPrepend (ParseDoc.SImmStringLiteral "blah"))
+                    ParseDoc.FilterPrepend (ParseDoc.SImmStringLiteral "blah")
             it "'replace'" $ "replace: the.string, \"blah\"" `filterShouldBe`
-                    (ParseDoc.FilterReplace (ParseDoc.SImmVar ["the", "string"])
-                                            (ParseDoc.SImmStringLiteral "blah"))
-            it "'replace_first'" $ "replace_first: \"heiehei\" , page.title " `filterShouldBe`
-                    (ParseDoc.FilterReplaceFirst (ParseDoc.SImmStringLiteral "heiehei")
-                                                (ParseDoc.SImmVar ["page", "title"]))
+                    ParseDoc.FilterReplace (ParseDoc.SImmVar ["the", "string"])
+                                            (ParseDoc.SImmStringLiteral "blah")
+            it "'replace_first'" $ "replace_first: \"blah\" , page.title " `filterShouldBe`
+                    ParseDoc.FilterReplaceFirst (ParseDoc.SImmStringLiteral "blah")
+                                                (ParseDoc.SImmVar ["page", "title"])
             it "'remove'" $ "remove: the.string" `filterShouldBe`
-                    (ParseDoc.FilterRemove (ParseDoc.SImmVar ["the", "string"]))
-            it "'remove_first'" $ "remove_first: \"heiehei\"" `filterShouldBe`
-                    (ParseDoc.FilterRemoveFirst (ParseDoc.SImmStringLiteral "heiehei"))
+                    ParseDoc.FilterRemove (ParseDoc.SImmVar ["the", "string"])
+            it "'remove_first'" $ "remove_first: \"blah\"" `filterShouldBe`
+                    ParseDoc.FilterRemoveFirst (ParseDoc.SImmStringLiteral "blah")
             it "'size'" $ "size" `filterShouldBe` ParseDoc.FilterSize
             it "'slice'" $ do
                 "slice: 4" `filterShouldBe` 
-                        (ParseDoc.FilterSlice (ParseDoc.NImmNumber 4) Nothing)
+                        ParseDoc.FilterSlice (ParseDoc.NImmNumber 4) Nothing
                 "slice: 5, 9" `filterShouldBe`
-                        (ParseDoc.FilterSlice (ParseDoc.NImmNumber 5) (Just (ParseDoc.NImmNumber 9)))
+                        ParseDoc.FilterSlice (ParseDoc.NImmNumber 5) (Just (ParseDoc.NImmNumber 9))
             it "'split'" $ "split: \",\"" `filterShouldBe`
-                    (ParseDoc.FilterSplit (ParseDoc.SImmStringLiteral ","))
+                    ParseDoc.FilterSplit (ParseDoc.SImmStringLiteral ",")
             it "'strip'" $ "strip" `filterShouldBe` ParseDoc.FilterStrip
             it "'strip_html'" $ "strip_html" `filterShouldBe` ParseDoc.FilterStripHtml
             it "'strip_newlines'" $ "strip_newlines" `filterShouldBe` ParseDoc.FilterStripNewlines
@@ -223,21 +223,21 @@ filteredStatement = do
             it "'newline_to_br'" $ "newline_to_br" `filterShouldBe` ParseDoc.FilterNewlineToBr
             it "'truncate'" $ do
                 "truncate: 42" `filterShouldBe`
-                        (ParseDoc.FilterTruncate (ParseDoc.NImmNumber 42) Nothing)
+                        ParseDoc.FilterTruncate (ParseDoc.NImmNumber 42) Nothing
                 "truncate: 64 ,\"blah\"" `filterShouldBe`
-                        (ParseDoc.FilterTruncate (ParseDoc.NImmNumber 64)
-                                                (Just (ParseDoc.SImmStringLiteral "blah")))
+                        ParseDoc.FilterTruncate (ParseDoc.NImmNumber 64)
+                                                (Just (ParseDoc.SImmStringLiteral "blah"))
             it "'truncatewords'" $ do
                 "truncatewords: 259" `filterShouldBe`
-                        (ParseDoc.FilterTruncateWords (ParseDoc.NImmNumber 259) Nothing)
+                        ParseDoc.FilterTruncateWords (ParseDoc.NImmNumber 259) Nothing
                 "truncatewords:49,my.ellipse" `filterShouldBe`
-                        (ParseDoc.FilterTruncateWords (ParseDoc.NImmNumber 49)
-                                                    (Just (ParseDoc.SImmVar ["my", "ellipse"])))
+                        ParseDoc.FilterTruncateWords (ParseDoc.NImmNumber 49)
+                                                    (Just (ParseDoc.SImmVar ["my", "ellipse"]))
             it "'date'" $ "date: \"%a, %b %d, %y\"" `filterShouldBe`
-                    (ParseDoc.FilterDate (ParseDoc.SImmStringLiteral "%a, %b %d, %y"))
+                    ParseDoc.FilterDate (ParseDoc.SImmStringLiteral "%a, %b %d, %y")
             it "'url_decode'" $ "url_decode" `filterShouldBe` ParseDoc.FilterUrlDecode
             it "'url_encode'" $ "url_encode" `filterShouldBe` ParseDoc.FilterUrlEncode
 
         describe "Miscellaneous filters" $ do
             it "'default'" $ "default: site.title" `filterShouldBe`
-                    (ParseDoc.FilterDefault (ParseDoc.ImmVar ["site", "title"]))
+                    ParseDoc.FilterDefault (ParseDoc.ImmVar ["site", "title"])
