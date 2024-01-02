@@ -23,9 +23,9 @@ import Data.Functor ((<&>), ($>))
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-import Data.Text hiding (empty, singleton, null)
+import Data.Text (Text, pack, stripEnd, stripStart)
 import Data.Void (Void)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 
 data Doc = Doc
   { docFrontMatter :: FrontMatter  -- ^ Front matter of the document.
@@ -156,8 +156,64 @@ pSymbol' = L.symbol spaceConsumer
 pAnything :: Parser Char
 pAnything = satisfy (const True)
 
-pInStmt :: Text -> Parser a -> Text -> Parser a
-pInStmt open x close = (string open >> space) *> x <* (space >> string close)
+
+-- | Store how whitespace should be stripped in and around a tag.
+data StripTag a = StripTag
+  { beforeTag :: Bool
+  , afterTag :: Bool
+  , tag :: a
+  } deriving (Show, Eq)
+
+instance Functor StripTag where
+  fmap f (StripTag b a t) = StripTag b a (f t)
+
+-- | Strip whitespace around the given list of blocks.
+stripBlocks :: [StripTag Block] -> [Block]
+stripBlocks = stripNestedBlocks False False
+
+-- | Strip whitespace around the given list of blocks.
+--   In @stripNestedBlock beforeFirst afterLast blocks@, @globalBefore@
+--   and @afterLast@ dictate what how whitespace at the start of the first
+--   block and at the end of the last block should be treated.
+stripNestedBlocks :: Bool -> Bool -> [StripTag Block] -> [Block]
+stripNestedBlocks beforeFirst afterLast bs =
+  foldr stripAfterIter [] (foldl stripBeforeIter [] bs)
+  where
+    stripBeforeIter :: [StripTag Block] -> StripTag Block -> [StripTag Block]
+    stripBeforeIter [] (StripTag True after t) = [StripTag False after (stripBlockBefore t)]
+    stripBeforeIter [] (StripTag False after t) =
+      [StripTag False after (if beforeFirst then stripBlockBefore t else t)]
+    stripBeforeIter acc (StripTag True a t) =
+      init acc ++ [stripBlockAfter <$> last acc, StripTag False a (stripBlockBefore t)]
+    stripBeforeIter acc st@(StripTag False _ _) = acc ++ [st] 
+
+    stripAfterIter :: StripTag Block -> [Block] -> [Block]
+    stripAfterIter (StripTag _ True t) [] = [stripBlockAfter t]
+    stripAfterIter (StripTag _ False t) [] =
+      [if afterLast then stripBlockAfter t else t]
+    stripAfterIter (StripTag _ True t) acc =
+      stripBlockAfter t : stripBlockBefore (head acc) : tail acc
+    stripAfterIter (StripTag _ False t) acc = t : acc
+
+    stripBlockAfter :: Block -> Block
+    stripBlockAfter b =
+      case b of
+        (LiteralContent c) -> LiteralContent (stripEnd c)
+        _ -> b
+
+    stripBlockBefore :: Block -> Block
+    stripBlockBefore b =
+      case b of
+        (LiteralContent c) -> LiteralContent (stripStart c)
+        _ -> b
+
+
+pTag :: Text -> Parser a -> Text -> Parser (StripTag a)
+pTag open x close = do
+  sb <- (string open *> optional (string "-") <* space) <&> isJust
+  ret <- x
+  sa <- (space *> optional (string "-") <* string close) <&> isJust
+  pure StripTag { beforeTag = sb, afterTag = sa, tag = ret }
 
 
 -- * Front Matter
@@ -259,7 +315,7 @@ pFilterExpr = choice $ try <$>
   , string "sort" $> FilterSort
   , withColon "map" >> pStringyImmExpr <&> FilterMap
   , string "compact" $> FilterCompact
-  , withColon "sum" >> pStringyImmExpr <&> Just <&> FilterSum
+  , (withColon "sum" >> pStringyImmExpr) <&> FilterSum . Just
   , string "sum" $> FilterSum Nothing
   , string "uniq" $> FilterUniq
   , withColon "where" >> pStringWithMaybeString <&> uncurry FilterWhere
@@ -325,22 +381,34 @@ pExpr = do
 
 -- * Statements
 
-pIfStmt :: Parser Stmt
+pIfStmt :: Parser (StripTag Stmt)
 pIfStmt = do
-  -- TODO: What about {%- -%}?
   -- TODO: Logical operator (==, and, etc.)
-  predicate <- pInStmt "{%" (pSymbol "if" >> pImmExpr) "%}"
+  -- TODO: Elsif
+  sTagIf <- pTag "{%" (pSymbol "if" >> pImmExpr) "%}" 
   consequent <- many (try pBlock)
-  alternative <- optional . try $ do
-    void $ pInStmt "{%" (string "else") "%}"
-    many (try pBlock)
-  void $ pInStmt "{%" (string "endif") "%}"
-  pure $ StmtIf predicate consequent alternative
+  elseBranch <- optional . try $ do
+    sTagElse <- pTag "{%" (string "else") "%}" 
+    blocks <- many (try pBlock)
+    pure (blocks, sTagElse)
+  sTagEndif <- pTag "{%" (string "endif") "%}" 
+  case elseBranch of
+    Just (alternative, sTagElse) -> do
+      let sc = stripNestedBlocks (afterTag sTagIf) (beforeTag sTagElse) consequent
+          sa = stripNestedBlocks (afterTag sTagElse) (beforeTag sTagEndif) alternative
+      pure $ StripTag (beforeTag sTagIf)
+                      (afterTag sTagEndif)
+                      (StmtIf (tag sTagIf) sc (Just sa))
+    Nothing ->
+      let sc = stripNestedBlocks (afterTag sTagIf) (beforeTag sTagEndif) consequent
+      in pure $ StripTag (beforeTag sTagIf)
+                         (afterTag sTagEndif)
+                         (StmtIf (tag sTagIf) sc Nothing)
 
-pStmt :: Parser Stmt
+pStmt :: Parser (StripTag Stmt)
 pStmt = choice  -- Note that there is no try here.
-  [ pInStmt "{{" (pExpr <&> StmtExpress) "}}"
-  , lookAhead (pSymbol' "{%" >> pSymbol "if") *> pIfStmt
+  [ pTag "{{" (pExpr <&> StmtExpress) "}}"
+  , lookAhead (string "{%" >> optional (string "-") >> space >> pSymbol "if") *> pIfStmt
   ]
 
 stmtLookAhead :: Parser Text
@@ -351,10 +419,10 @@ pLiteralContent = someTill pAnything endOfContent <&> pack
   where
     endOfContent = (stmtLookAhead $> ()) <|> eof
 
-pBlock :: Parser Block
+pBlock :: Parser (StripTag Block)
 pBlock = choice
-  [ stmtLookAhead >> pStmt <&> Stmt
-  , pLiteralContent <&> LiteralContent
+  [ stmtLookAhead >> pStmt <&> \(StripTag b a stmt) -> StripTag b a (Stmt stmt)
+  , pLiteralContent <&> \c -> StripTag False False (LiteralContent c)
   ]
 
 -- * Document
@@ -364,9 +432,9 @@ pDocument = do
   -- Parse an optional front matter. If @---@ is found, we commit
   -- to parsing the front matter and don't fall back.
   fm <- optional $ do
-    void $ lookAhead (space >> pSymbol "---")
+    void $ try (lookAhead (space >> pSymbol "---"))
     void space
     pFrontMatter
-  blocks' <- many pBlock
+  blocks' <- many pBlock <&> stripBlocks
   let blocks = if null blocks' then [LiteralContent ""] else blocks'
   pure $ Doc (fromMaybe (Y.object []) fm) blocks

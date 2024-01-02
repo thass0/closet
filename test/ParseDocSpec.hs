@@ -51,6 +51,8 @@ spec = do
     describe "Parse documents" $ do
         frontMatter
         statement
+        it "white space at start of input" $ do
+                runDocParse "   This is my entire document! " `shouldBe` Right (docWithEmptyFM [ParseDoc.LiteralContent "   This is my entire document! "])
 
 frontMatter :: Spec
 frontMatter = do
@@ -300,3 +302,26 @@ Baz
                                 parsedIfStmt (ParseDoc.ImmNumber 512)
                                              [ParseDoc.LiteralContent "I love powers of two!"]
                                              Nothing
+                it "white space stripped in if statement" $ do
+                        let input = [r|
+{%- if x %}
+Blah
+{%- else -%}
+Not Blah
+{% endif -%}
+{%- if y %}
+ Baz
+{%- endif -%}
+Foo|]
+                        runDocParse input `shouldBe` Right (docWithEmptyFM
+                                        [ ParseDoc.LiteralContent ""
+                                        , ParseDoc.Stmt (ParseDoc.StmtIf
+                                                        (ParseDoc.ImmVar ["x"])
+                                                        [ParseDoc.LiteralContent "\nBlah"]
+                                                        (Just [ParseDoc.LiteralContent "Not Blah\n"]))
+                                        , ParseDoc.LiteralContent ""
+                                        , ParseDoc.Stmt (ParseDoc.StmtIf
+                                                        (ParseDoc.ImmVar ["y"])
+                                                        [ParseDoc.LiteralContent "\n Baz"]
+                                                        Nothing)
+                                        , ParseDoc.LiteralContent "Foo"])
