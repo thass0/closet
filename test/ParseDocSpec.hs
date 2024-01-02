@@ -123,22 +123,27 @@ expressStatement = do
     describe "Express statement" $ do
         it "Simple express statement" $ do
             runDocParse "{{ blah.x }}" `shouldBe`
-                    parsedImmExpr (ParseDoc.ImmVar ["blah", "x"])
+                parsedImmExpr (ParseDoc.ImmVar ["blah", "x"])
             runDocParse "{{ blah.x.y.hello.world }}" `shouldBe`
-                    parsedImmExpr (ParseDoc.ImmVar ["blah", "x", "y", "hello", "world"])
+                parsedImmExpr (ParseDoc.ImmVar ["blah", "x", "y", "hello", "world"])
             runDocParse "{{ \"Hello, world!\" }}" `shouldBe`
-                    parsedImmExpr (ParseDoc.ImmStringLiteral "Hello, world!")
+                parsedImmExpr (ParseDoc.ImmStringLiteral "Hello, world!")
             runDocParse "{{ 543 }}" `shouldBe`
-                    parsedImmExpr (ParseDoc.ImmNumber 543)
+                parsedImmExpr (ParseDoc.ImmNumber 543)
             runDocParse "{{ -61 }}" `shouldBe`
-                    parsedImmExpr (ParseDoc.ImmNumber (-61))
+                parsedImmExpr (ParseDoc.ImmNumber (-61))
             runDocParse "{{blah}}" `shouldBe`
-                    parsedImmExpr (ParseDoc.ImmVar ["blah"])
+                parsedImmExpr (ParseDoc.ImmVar ["blah"])
         it "Invalid express statement"$ do
             runDocParse "{{ blah!x }}" `shouldSatisfy` isLeft
             runDocParse "{{ blah.x. }}" `shouldSatisfy` isLeft
             runDocParse "{{ blah * 91 }}" `shouldSatisfy` isLeft
             runDocParse "{{ 514blah }}" `shouldSatisfy` isLeft
+        it "strip whitespace in express statements" $ do
+            runDocParse " foo {{- blah -}} bar " `shouldBe` Right (docWithEmptyFM
+                [ ParseDoc.LiteralContent " foo"
+                , ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr (ParseDoc.ImmVar ["blah"]) []))
+                , ParseDoc.LiteralContent "bar " ])
 
 filteredStatement :: Spec
 filteredStatement = do
