@@ -378,19 +378,18 @@ Not Blah
 {%- if y %}
  Baz
 {%- endif -%}
-Foo|]
+Foo
+|]
       runDocParse input
         `shouldBe` Right
           ( docWithEmptyFM
-              [ ParseDoc.LiteralContent "",
-                ParseDoc.Stmt
+              [ ParseDoc.Stmt
                   ( ParseDoc.StmtIf
                       (ParseDoc.ImmVar ["x"])
                       [ParseDoc.LiteralContent "\nBlah"]
                       []
                       (Just [ParseDoc.LiteralContent "Not Blah\n"])
                   ),
-                ParseDoc.LiteralContent "",
                 ParseDoc.Stmt
                   ( ParseDoc.StmtIf
                       (ParseDoc.ImmVar ["y"])
@@ -398,18 +397,20 @@ Foo|]
                       []
                       Nothing
                   ),
-                ParseDoc.LiteralContent "Foo"
+                ParseDoc.LiteralContent "Foo\n"
               ]
           )
     it "if statements with elsif and else branches" $ do
       let input =
-            [r|{%- if x -%}
+            [r|
+{%- if x -%}
 Foo
 {%- elsif y -%}
 Bar
 {%- else -%}
 Baz
-{%- endif -%}|]
+{%- endif -%}
+|]
       runDocParse input
       `shouldBe` parsedIfStmt
         (ParseDoc.ImmVar ["x"])
@@ -419,7 +420,8 @@ Baz
         (Just [ParseDoc.LiteralContent "Baz"])
     it "if statements with only elsif branches" $ do
       let input =
-            [r|{%- if one -%}
+            [r|
+{%- if one -%}
 One
 {%- elsif two -%}
 Two
@@ -427,7 +429,8 @@ Two
 Three
 {%- elsif four -%}
 Four
-{%- endif -%}|]
+{%- endif -%}
+|]
       runDocParse input
         `shouldBe` parsedIfStmt
           (ParseDoc.ImmVar ["one"])

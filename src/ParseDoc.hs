@@ -171,8 +171,6 @@ instance Functor StripTag where
 stripBlocks :: [StripTag Block] -> [Block]
 stripBlocks = stripNestedBlocks False False
 
--- TODO: Drop empty literal content strings.
-
 -- | Strip whitespace around the given list of blocks.
 --   In @stripNestedBlock beforeFirst afterLast blocks@, @globalBefore@
 --   and @afterLast@ dictate what how whitespace at the start of the first
@@ -190,12 +188,12 @@ stripNestedBlocks beforeFirst afterLast bs =
     stripBeforeIter acc st@(StripTag False _ _) = acc ++ [st] 
 
     stripAfterIter :: StripTag Block -> [Block] -> [Block]
-    stripAfterIter (StripTag _ True t) [] = [stripBlockAfter t]
+    stripAfterIter (StripTag _ True t) [] = stripBlockAfter t ?: []
     stripAfterIter (StripTag _ False t) [] =
-      [if afterLast then stripBlockAfter t else t]
+      (if afterLast then stripBlockAfter t else t) ?: []
     stripAfterIter (StripTag _ True t) acc =
-      stripBlockAfter t : stripBlockBefore (head acc) : tail acc
-    stripAfterIter (StripTag _ False t) acc = t : acc
+      stripBlockAfter t ?: (stripBlockBefore (head acc) ?: tail acc)
+    stripAfterIter (StripTag _ False t) acc = t ?: acc
 
     stripBlockAfter :: Block -> Block
     stripBlockAfter b =
@@ -208,6 +206,13 @@ stripNestedBlocks beforeFirst afterLast bs =
       case b of
         (LiteralContent c) -> LiteralContent (stripStart c)
         _ -> b
+    
+    -- Cons blocks but drop any blocks that's an empty literal
+    -- content string. Used in 'stripAfterIter' to drop all content
+    -- that was purely made of whitespace and stripped.
+    (?:) :: Block -> [Block] -> [Block]
+    (LiteralContent "") ?: bs' = bs'
+    b ?: bs' = b : bs'
 
 
 pTag :: Text -> Parser a -> Text -> Parser (StripTag a)
