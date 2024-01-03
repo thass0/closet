@@ -41,7 +41,7 @@ data Block
   deriving (Show, Eq)
 
 data Stmt
-  = StmtIf ImmExpr [Block] (Maybe [Block])  -- ^ Predicate Consequent Alternative
+  = StmtIf ImmExpr [Block] [(ImmExpr, [Block])] (Maybe [Block])  -- ^ Predicate Consequent Alternatives Final
   | StmtFor
   | StmtAssign
   | StmtUnless
@@ -170,6 +170,8 @@ instance Functor StripTag where
 -- | Strip whitespace around the given list of blocks.
 stripBlocks :: [StripTag Block] -> [Block]
 stripBlocks = stripNestedBlocks False False
+
+-- TODO: Drop empty literal content strings.
 
 -- | Strip whitespace around the given list of blocks.
 --   In @stripNestedBlock beforeFirst afterLast blocks@, @globalBefore@
@@ -384,45 +386,96 @@ pExpr = do
 pIfStmt :: Parser (StripTag Stmt)
 pIfStmt = do
   -- TODO: Logical operator (==, and, etc.)
-  -- TODO: Elsif
   sTagIf <- pTag "{%" (pSymbol "if" >> pImmExpr) "%}" 
   consequent <- many (try pBlock)
+
+  elsifBranches <- many . try $ do
+    sTagElsif <- pTag "{%" (pSymbol "elsif" >> pImmExpr) "%}"
+    blocks <- many (try pBlock)
+    pure (sTagElsif, blocks)
+
   elseBranch <- optional . try $ do
     sTagElse <- pTag "{%" (string "else") "%}" 
     blocks <- many (try pBlock)
-    pure (blocks, sTagElse)
+    pure (sTagElse, blocks)
+
   sTagEndif <- pTag "{%" (string "endif") "%}" 
+
+  let elsifTags = fst <$> elsifBranches
   case elseBranch of
-    Just (alternative, sTagElse) -> do
-      let sc = stripNestedBlocks (afterTag sTagIf) (beforeTag sTagElse) consequent
-          sa = stripNestedBlocks (afterTag sTagElse) (beforeTag sTagEndif) alternative
+    Just (sTagElse, final) -> do
+      let strippedAlts = stripParsedElsifs (beforeTag sTagElse) elsifBranches
+      let beforeCons = afterTag sTagIf
+          afterCons = case elsifTags of
+                        (firstTag : _) -> beforeTag firstTag
+                        _ -> beforeTag sTagElse
+          strippedCons = stripNestedBlocks beforeCons afterCons consequent
+      let beforeFinal = case elsifTags of
+                          [] -> afterTag sTagElse
+                          eb -> let lastTag = last eb in afterTag lastTag
+          afterFinal = beforeTag sTagEndif
+          strippedFinal = stripNestedBlocks beforeFinal afterFinal final
       pure $ StripTag (beforeTag sTagIf)
                       (afterTag sTagEndif)
-                      (StmtIf (tag sTagIf) sc (Just sa))
+                      (StmtIf (tag sTagIf) strippedCons strippedAlts (Just strippedFinal))
     Nothing ->
-      let sc = stripNestedBlocks (afterTag sTagIf) (beforeTag sTagEndif) consequent
+      let strippedAlts = stripParsedElsifs (beforeTag sTagEndif) elsifBranches
+          beforeCons = afterTag sTagIf
+          afterCons = case elsifTags of
+                        (firstTag : _) -> beforeTag firstTag
+                        _ -> beforeTag sTagEndif
+          strippedCons = stripNestedBlocks beforeCons afterCons consequent
       in pure $ StripTag (beforeTag sTagIf)
                          (afterTag sTagEndif)
-                         (StmtIf (tag sTagIf) sc Nothing)
+                         (StmtIf (tag sTagIf) strippedCons strippedAlts Nothing)
+
+-- | @stripParsedElsifs stripAfterLast parsedElsifs@ strips whitespace from elsifs.
+stripParsedElsifs :: Bool -> [(StripTag ImmExpr, [StripTag Block])] -> [(ImmExpr, [Block])]
+stripParsedElsifs afterLast blocks =
+  let collected = foldr collectStripInfo [] blocks
+  in stripWithInfo <$> collected
+  where
+    -- Elsif alternatives are parsed as a list of pairs of a predicate and a list of blocks to execute
+    -- if the predicate is true. Those blocks (called an alternative) need to know if white space
+    -- should be stripped _after_ their predicate and if white space should be tripped _before_
+    -- the tag that follows. The tag that follows the last alternative is not part of the list anymore.
+    -- This moves all information about how to strip an alternative into the list element of that
+    -- alternative itself. Use it as a foldr.
+    collectStripInfo
+      :: (StripTag ImmExpr, [StripTag Block])  -- ^ Current.
+      -> [(StripTag ImmExpr, StripTag [StripTag Block])]  -- ^ Accumulator
+      -> [(StripTag ImmExpr, StripTag [StripTag Block])]
+    collectStripInfo (expr, alt) [] = [(expr, StripTag (afterTag expr) afterLast alt)]
+    collectStripInfo (expr, alt) ((afterExpr, afterAlt):acc)
+      = (expr, StripTag (afterTag expr) (beforeTag afterExpr) alt)
+      : (afterExpr, afterAlt)
+      : acc
+ 
+    stripWithInfo :: (StripTag ImmExpr, StripTag [StripTag Block]) -> (ImmExpr, [Block])
+    stripWithInfo (StripTag _ _ expr, StripTag beforeAlt afterAlt alt) =
+      (expr, stripNestedBlocks beforeAlt afterAlt alt)
+
+stmtLookAhead :: Text -> Parser Text
+stmtLookAhead name = lookAhead (string "{%" >> optional (string "-") >> space >> pSymbol name)
 
 pStmt :: Parser (StripTag Stmt)
 pStmt = choice  -- Note that there is no try here.
   [ pTag "{{" (pExpr <&> StmtExpress) "}}"
-  , lookAhead (string "{%" >> optional (string "-") >> space >> pSymbol "if") *> pIfStmt
+  , stmtLookAhead "if" >> pIfStmt
   ]
 
-stmtLookAhead :: Parser Text
-stmtLookAhead = lookAhead $ choice (string <$> ["{{", "{%", "{{-", "{%-"])
+tagLookAhead :: Parser Text
+tagLookAhead = lookAhead $ choice (string <$> ["{{", "{%", "{{-", "{%-"])
 
 pLiteralContent :: Parser Text
 pLiteralContent = someTill pAnything endOfContent <&> pack
   where
-    endOfContent = (stmtLookAhead $> ()) <|> eof
+    endOfContent = (tagLookAhead $> ()) <|> eof
 
 pBlock :: Parser (StripTag Block)
 pBlock = choice
-  [ stmtLookAhead >> pStmt <&> \(StripTag b a stmt) -> StripTag b a (Stmt stmt)
-  , pLiteralContent <&> \c -> StripTag False False (LiteralContent c)
+  [ tagLookAhead >> pStmt <&> fmap Stmt
+  , pLiteralContent <&> StripTag False False . LiteralContent
   ]
 
 -- * Document

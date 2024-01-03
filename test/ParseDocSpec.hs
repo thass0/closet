@@ -40,11 +40,12 @@ parsedExpr imm f =
 parsedIfStmt ::
   ParseDoc.ImmExpr ->
   [ParseDoc.Block] ->
+  [(ParseDoc.ImmExpr, [ParseDoc.Block])] ->
   Maybe [ParseDoc.Block] ->
   Either String ParseDoc.Doc
-parsedIfStmt predicate consequent alternative =
+parsedIfStmt predicate consequent alternatives final =
   Right
-    (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtIf predicate consequent alternative)])
+    (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtIf predicate consequent alternatives final)])
 
 -- * Specs
 
@@ -309,6 +310,7 @@ Mr. White
         `shouldBe` parsedIfStmt
           (ParseDoc.ImmVar ["say_my_name"])
           [ParseDoc.LiteralContent "\nHeisenberg\n"]
+          []
           (Just [ParseDoc.LiteralContent "\nMr. White\n"])
     it "nested if statements" $ do
       let input =
@@ -329,10 +331,12 @@ Baz
               ( ParseDoc.StmtIf
                   (ParseDoc.ImmVar ["blah", "x"])
                   [ParseDoc.LiteralContent "\nFoo\n"]
+                  []
                   (Just [ParseDoc.LiteralContent "\nBar\n"])
               ),
             ParseDoc.LiteralContent "\n"
           ]
+          []
           (Just [ParseDoc.LiteralContent "\nBaz\n"])
       let input2 = "{%if a%}{%if b%}{%if c%}Foo{%else%}Bar{%endif%}{%else%}Baz{%endif%}{%else%}Blah{%endif%}"
       runDocParse input2
@@ -345,12 +349,15 @@ Baz
                       ( ParseDoc.StmtIf
                           (ParseDoc.ImmVar ["c"])
                           [ParseDoc.LiteralContent "Foo"]
+                          []
                           (Just [ParseDoc.LiteralContent "Bar"])
                       )
                   ]
+                  []
                   (Just [ParseDoc.LiteralContent "Baz"])
               )
           ]
+          []
           (Just [ParseDoc.LiteralContent "Blah"])
     it "if statement without alternative" $ do
       let input = "{% if 512 %}I love powers of two!{% endif %}"
@@ -358,6 +365,7 @@ Baz
         `shouldBe` parsedIfStmt
           (ParseDoc.ImmNumber 512)
           [ParseDoc.LiteralContent "I love powers of two!"]
+          []
           Nothing
     it "white space stripped in if statement" $ do
       let input =
@@ -379,6 +387,7 @@ Foo|]
                   ( ParseDoc.StmtIf
                       (ParseDoc.ImmVar ["x"])
                       [ParseDoc.LiteralContent "\nBlah"]
+                      []
                       (Just [ParseDoc.LiteralContent "Not Blah\n"])
                   ),
                 ParseDoc.LiteralContent "",
@@ -386,8 +395,44 @@ Foo|]
                   ( ParseDoc.StmtIf
                       (ParseDoc.ImmVar ["y"])
                       [ParseDoc.LiteralContent "\n Baz"]
+                      []
                       Nothing
                   ),
                 ParseDoc.LiteralContent "Foo"
               ]
           )
+    it "if statements with elsif and else branches" $ do
+      let input =
+            [r|{%- if x -%}
+Foo
+{%- elsif y -%}
+Bar
+{%- else -%}
+Baz
+{%- endif -%}|]
+      runDocParse input
+      `shouldBe` parsedIfStmt
+        (ParseDoc.ImmVar ["x"])
+        [ParseDoc.LiteralContent "Foo"]
+        [ (ParseDoc.ImmVar ["y"], [ParseDoc.LiteralContent "Bar"])
+        ]
+        (Just [ParseDoc.LiteralContent "Baz"])
+    it "if statements with only elsif branches" $ do
+      let input =
+            [r|{%- if one -%}
+One
+{%- elsif two -%}
+Two
+{%- elsif three -%}
+Three
+{%- elsif four -%}
+Four
+{%- endif -%}|]
+      runDocParse input
+        `shouldBe` parsedIfStmt
+          (ParseDoc.ImmVar ["one"])
+          [ParseDoc.LiteralContent "One"]
+          [ (ParseDoc.ImmVar ["two"], [ParseDoc.LiteralContent "Two"])
+          , (ParseDoc.ImmVar ["three"], [ParseDoc.LiteralContent "Three"])
+          , (ParseDoc.ImmVar ["four"], [ParseDoc.LiteralContent "Four"]) ]
+          Nothing
