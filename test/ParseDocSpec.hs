@@ -56,7 +56,7 @@ spec = do
     frontMatter
     statement
     it "white space at start of input" $ do
-      runDocParse "   This is my entire document! " `shouldBe` Right (docWithEmptyFM [ParseDoc.LiteralContent "   This is my entire document! "])
+      runDocParse "   This is my entire document! " `shouldBe` Right (docWithEmptyFM [ParseDoc.Cont "   This is my entire document! "])
 
 frontMatter :: Spec
 frontMatter = do
@@ -82,7 +82,7 @@ This is the content of this page!|]
                                  "age" .= (41 :: Int),
                                  "children" .= Y.array ["Child1", "Child2", "Child3"]
                                ],
-                           docBlocks = [ParseDoc.LiteralContent "This is the content of this page!"]
+                           docBlocks = [ParseDoc.Cont "This is the content of this page!"]
                          }
                    )
 
@@ -99,7 +99,7 @@ Blah is the best filler word possible.|]
                          { docFrontMatter =
                              Y.object
                                ["title" .= ("Blah --- my personal blog about Blah!" :: Text)],
-                           docBlocks = [ParseDoc.LiteralContent "Blah is the best filler word possible."]
+                           docBlocks = [ParseDoc.Cont "Blah is the best filler word possible."]
                          }
                    )
 
@@ -111,7 +111,7 @@ Blah is the best filler word possible.|]
       let input2Doc =
             ParseDoc.Doc
               { docFrontMatter = Y.object ["title" .= ("My blog" :: Text)],
-                docBlocks = [ParseDoc.LiteralContent ""]
+                docBlocks = [ParseDoc.Cont ""]
               }
       runDocParse input2Win `shouldBe` Right input2Doc
       runDocParse input2Unix `shouldBe` Right input2Doc
@@ -157,9 +157,9 @@ expressStatement = do
       runDocParse " foo {{- blah -}} bar "
         `shouldBe` Right
           ( docWithEmptyFM
-              [ ParseDoc.LiteralContent " foo",
+              [ ParseDoc.Cont " foo",
                 ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr (ParseDoc.ImmVar ["blah"]) [])),
-                ParseDoc.LiteralContent "bar "
+                ParseDoc.Cont "bar "
               ]
           )
 
@@ -310,9 +310,9 @@ Mr. White
       runDocParse input
         `shouldBe` parsedIfStmt
           (ParseDoc.ImmVar ["say_my_name"])
-          [ParseDoc.LiteralContent "\nHeisenberg\n"]
+          [ParseDoc.Cont "\nHeisenberg\n"]
           []
-          (Just [ParseDoc.LiteralContent "\nMr. White\n"])
+          (Just [ParseDoc.Cont "\nMr. White\n"])
     it "nested if statements" $ do
       let input =
             [r|{% if blah %}
@@ -327,18 +327,18 @@ Baz
       runDocParse input
         `shouldBe` parsedIfStmt
           (ParseDoc.ImmVar ["blah"])
-          [ ParseDoc.LiteralContent "\n",
+          [ ParseDoc.Cont "\n",
             ParseDoc.Stmt
               ( ParseDoc.StmtIf
                   (ParseDoc.immVar ["blah", "x"])
-                  [ParseDoc.LiteralContent "\nFoo\n"]
+                  [ParseDoc.Cont "\nFoo\n"]
                   []
-                  (Just [ParseDoc.LiteralContent "\nBar\n"])
+                  (Just [ParseDoc.Cont "\nBar\n"])
               ),
-            ParseDoc.LiteralContent "\n"
+            ParseDoc.Cont "\n"
           ]
           []
-          (Just [ParseDoc.LiteralContent "\nBaz\n"])
+          (Just [ParseDoc.Cont "\nBaz\n"])
       let input2 = "{%if a%}{%if b%}{%if c%}Foo{%else%}Bar{%endif%}{%else%}Baz{%endif%}{%else%}Blah{%endif%}"
       runDocParse input2
         `shouldBe` parsedIfStmt
@@ -349,23 +349,23 @@ Baz
                   [ ParseDoc.Stmt
                       ( ParseDoc.StmtIf
                           (ParseDoc.immVar ["c"])
-                          [ParseDoc.LiteralContent "Foo"]
+                          [ParseDoc.Cont "Foo"]
                           []
-                          (Just [ParseDoc.LiteralContent "Bar"])
+                          (Just [ParseDoc.Cont "Bar"])
                       )
                   ]
                   []
-                  (Just [ParseDoc.LiteralContent "Baz"])
+                  (Just [ParseDoc.Cont "Baz"])
               )
           ]
           []
-          (Just [ParseDoc.LiteralContent "Blah"])
+          (Just [ParseDoc.Cont "Blah"])
     it "if statement without alternative" $ do
       let input = "{% if 512 %}I love powers of two!{% endif %}"
       runDocParse input
         `shouldBe` parsedIfStmt
           (ParseDoc.ImmNum 512)
-          [ParseDoc.LiteralContent "I love powers of two!"]
+          [ParseDoc.Cont "I love powers of two!"]
           []
           Nothing
     it "white space stripped in if statement" $ do
@@ -387,18 +387,18 @@ Foo
               [ ParseDoc.Stmt
                   ( ParseDoc.StmtIf
                       (ParseDoc.immVar ["x"])
-                      [ParseDoc.LiteralContent "\nBlah"]
+                      [ParseDoc.Cont "\nBlah"]
                       []
-                      (Just [ParseDoc.LiteralContent "Not Blah\n"])
+                      (Just [ParseDoc.Cont "Not Blah\n"])
                   ),
                 ParseDoc.Stmt
                   ( ParseDoc.StmtIf
                       (ParseDoc.immVar ["y"])
-                      [ParseDoc.LiteralContent "\n Baz"]
+                      [ParseDoc.Cont "\n Baz"]
                       []
                       Nothing
                   ),
-                ParseDoc.LiteralContent "Foo\n"
+                ParseDoc.Cont "Foo\n"
               ]
           )
     it "if statements with elsif and else branches" $ do
@@ -415,10 +415,10 @@ Baz
       runDocParse input
       `shouldBe` parsedIfStmt
         (ParseDoc.ImmVar ["x"])
-        [ParseDoc.LiteralContent "Foo"]
-        [ (ParseDoc.ImmVar ["y"], [ParseDoc.LiteralContent "Bar"])
+        [ParseDoc.Cont "Foo"]
+        [ (ParseDoc.ImmVar ["y"], [ParseDoc.Cont "Bar"])
         ]
-        (Just [ParseDoc.LiteralContent "Baz"])
+        (Just [ParseDoc.Cont "Baz"])
     it "if statements with only elsif branches" $ do
       let input =
             [r|
@@ -435,8 +435,8 @@ Four
       runDocParse input
         `shouldBe` parsedIfStmt
           (ParseDoc.ImmVar ["one"])
-          [ParseDoc.LiteralContent "One"]
-          [ (ParseDoc.ImmVar ["two"], [ParseDoc.LiteralContent "Two"])
-          , (ParseDoc.ImmVar ["three"], [ParseDoc.LiteralContent "Three"])
-          , (ParseDoc.ImmVar ["four"], [ParseDoc.LiteralContent "Four"]) ]
+          [ParseDoc.Cont "One"]
+          [ (ParseDoc.ImmVar ["two"], [ParseDoc.Cont "Two"])
+          , (ParseDoc.ImmVar ["three"], [ParseDoc.Cont "Three"])
+          , (ParseDoc.ImmVar ["four"], [ParseDoc.Cont "Four"]) ]
           Nothing

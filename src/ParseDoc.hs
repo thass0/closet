@@ -38,7 +38,7 @@ type FrontMatter = Y.Value
 
 data Block
   = Stmt Stmt
-  | LiteralContent Text
+  | Cont Text
   deriving (Show, Eq)
 
 data Stmt
@@ -213,20 +213,20 @@ stripNestedBlocks beforeFirst afterLast bs =
     stripBlockAfter :: Block -> Block
     stripBlockAfter b =
       case b of
-        (LiteralContent c) -> LiteralContent (stripEnd c)
+        (Cont c) -> Cont (stripEnd c)
         _ -> b
 
     stripBlockBefore :: Block -> Block
     stripBlockBefore b =
       case b of
-        (LiteralContent c) -> LiteralContent (stripStart c)
+        (Cont c) -> Cont (stripStart c)
         _ -> b
     
     -- Cons blocks but drop any blocks that's an empty literal
     -- content string. Used in 'stripAfterIter' to drop all content
     -- that was purely made of whitespace and stripped.
     (?:) :: Block -> [Block] -> [Block]
-    (LiteralContent "") ?: bs' = bs'
+    (Cont "") ?: bs' = bs'
     b ?: bs' = b : bs'
 
 
@@ -487,15 +487,15 @@ pStmt = choice  -- Note that there is no try here.
 tagLookAhead :: Parser Text
 tagLookAhead = lookAhead $ choice (string <$> ["{{", "{%", "{{-", "{%-"])
 
-pLiteralContent :: Parser Text
-pLiteralContent = someTill pAnything endOfContent <&> pack
+pCont :: Parser Text
+pCont = someTill pAnything endOfContent <&> pack
   where
     endOfContent = (tagLookAhead $> ()) <|> eof
 
 pBlock :: Parser (StripTag Block)
 pBlock = choice
   [ tagLookAhead >> pStmt <&> fmap Stmt
-  , pLiteralContent <&> StripTag False False . LiteralContent
+  , pCont <&> StripTag False False . Cont
   ]
 
 -- * Document
@@ -509,5 +509,5 @@ pDocument = do
     void space
     pFrontMatter
   blocks' <- many pBlock <&> stripBlocks
-  let blocks = if null blocks' then [LiteralContent ""] else blocks'
+  let blocks = if null blocks' then [Cont ""] else blocks'
   pure $ Doc (fromMaybe (Y.object []) fm) blocks
