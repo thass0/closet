@@ -27,25 +27,26 @@ docWithEmptyFM p =
       docBlocks = p
     }
 
-parsedImmExpr :: ParseDoc.ImmExpr -> Either String ParseDoc.Doc
+parsedImmExpr :: ParseDoc.BaseExpr -> Either String ParseDoc.Doc
 parsedImmExpr imm =
   Right
     (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr imm []))])
 
-parsedExpr :: ParseDoc.ImmExpr -> [ParseDoc.FilterExpr] -> Either String ParseDoc.Doc
+parsedExpr :: ParseDoc.BaseExpr -> [ParseDoc.FilterExpr] -> Either String ParseDoc.Doc
 parsedExpr imm f =
   Right
     (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr imm f))])
 
 parsedIfStmt ::
-  ParseDoc.ImmExpr ->
+  ParseDoc.BaseExpr ->
   [ParseDoc.Block] ->
-  [(ParseDoc.ImmExpr, [ParseDoc.Block])] ->
+  [(ParseDoc.BaseExpr, [ParseDoc.Block])] ->
   Maybe [ParseDoc.Block] ->
   Either String ParseDoc.Doc
-parsedIfStmt predicate consequent alternatives final =
-  Right
-    (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtIf predicate consequent alternatives final)])
+parsedIfStmt prd' consequent alts' final =
+  let alts = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> alts'
+      prd = ParseDoc.Expr prd' []
+  in Right (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtIf prd consequent alts final)])
 
 -- * Specs
 
@@ -140,11 +141,11 @@ expressStatement = do
       runDocParse "{{ blah.x.y.hello.world }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah", "x", "y", "hello", "world"])
       runDocParse "{{ \"Hello, world!\" }}"
-        `shouldBe` parsedImmExpr (ParseDoc.ImmStringLiteral "Hello, world!")
+        `shouldBe` parsedImmExpr (ParseDoc.ImmStrLit "Hello, world!")
       runDocParse "{{ 543 }}"
-        `shouldBe` parsedImmExpr (ParseDoc.ImmNumber 543)
+        `shouldBe` parsedImmExpr (ParseDoc.ImmNum 543)
       runDocParse "{{ -61 }}"
-        `shouldBe` parsedImmExpr (ParseDoc.ImmNumber (-61))
+        `shouldBe` parsedImmExpr (ParseDoc.ImmNum (-61))
       runDocParse "{{blah}}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah"])
     it "Invalid express statement" $ do
@@ -171,31 +172,31 @@ filteredStatement = do
     describe "Numeric filters" $ do
       it "'plus'" $
         "plus: 4891"
-          `filterShouldBe` ParseDoc.FilterPlus (ParseDoc.NImmNumber 4891)
+          `filterShouldBe` ParseDoc.FilterPlus (ParseDoc.NumberyNum 4891)
       it "'minus'" $
         "minus: 51"
-          `filterShouldBe` ParseDoc.FilterMinus (ParseDoc.NImmNumber 51)
+          `filterShouldBe` ParseDoc.FilterMinus (ParseDoc.NumberyNum 51)
       it "'times'" $
         "times: -642"
-          `filterShouldBe` ParseDoc.FilterTimes (ParseDoc.NImmNumber (-642))
+          `filterShouldBe` ParseDoc.FilterTimes (ParseDoc.NumberyNum (-642))
       it "'divided_by'" $
         "divided_by: y"
-          `filterShouldBe` ParseDoc.FilterDividedBy (ParseDoc.NImmVar ["y"])
+          `filterShouldBe` ParseDoc.FilterDividedBy (ParseDoc.NumberyVar ["y"])
       it "'modulo'" $
         "modulo: site.x"
-          `filterShouldBe` ParseDoc.FilterModulo (ParseDoc.NImmVar ["site", "x"])
+          `filterShouldBe` ParseDoc.FilterModulo (ParseDoc.NumberyVar ["site", "x"])
       it "'at_least'" $ do
         "at_least: 19"
-          `filterShouldBe` ParseDoc.FilterAtLeast (ParseDoc.NImmNumber 19)
+          `filterShouldBe` ParseDoc.FilterAtLeast (ParseDoc.NumberyNum 19)
         runDocParse "{{ 19 | at_least: \"Blah\" }}" `shouldSatisfy` isLeft
       it "'at_most'" $ do
         "at_most: 19"
-          `filterShouldBe` ParseDoc.FilterAtMost (ParseDoc.NImmNumber 19)
+          `filterShouldBe` ParseDoc.FilterAtMost (ParseDoc.NumberyNum 19)
         runDocParse "{{ 19 | at_most: \"Blah\" }}" `shouldSatisfy` isLeft
       it "'abs'" $ do
         "abs" `filterShouldBe` ParseDoc.FilterAbs
         runDocParse "{{ -32 | abs | abs|abs|abs  | abs}}"
-          `shouldBe` parsedExpr (ParseDoc.ImmNumber (-32)) (replicate 5 ParseDoc.FilterAbs)
+          `shouldBe` parsedExpr (ParseDoc.ImmNum (-32)) (replicate 5 ParseDoc.FilterAbs)
       it "'ceil'" $ "ceil" `filterShouldBe` ParseDoc.FilterCeil
       it "'floor'" $ "floor" `filterShouldBe` ParseDoc.FilterFloor
       it "'round'" $ "round" `filterShouldBe` ParseDoc.FilterRound
@@ -203,33 +204,33 @@ filteredStatement = do
     describe "Array and object filters" $ do
       it "'append'" $ do
         "append: \"World!\""
-          `filterShouldBe` ParseDoc.FilterAppend (ParseDoc.SImmStringLiteral "World!")
+          `filterShouldBe` ParseDoc.FilterAppend (ParseDoc.StringyLit "World!")
         runDocParse "{{ \"Blah\" | append: 91 }}" `shouldSatisfy` isLeft
       it "'concat'" $ "concat: wowow" `filterShouldBe` ParseDoc.FilterConcat ["wowow"]
       it "'first'" $ "first" `filterShouldBe` ParseDoc.FilterFirst
       it "'last'" $ "last" `filterShouldBe` ParseDoc.FilterLast
       it "'join'" $
         "join: blah"
-          `filterShouldBe` ParseDoc.FilterJoin (ParseDoc.SImmVar ["blah"])
+          `filterShouldBe` ParseDoc.FilterJoin (ParseDoc.StringyVar ["blah"])
       it "'reverse'" $ "reverse" `filterShouldBe` ParseDoc.FilterReverse
       it "'sort'" $ "sort" `filterShouldBe` ParseDoc.FilterSort
       it "'sort_natural'" $ "sort_natural" `filterShouldBe` ParseDoc.FilterSortNatural
       it "'map'" $
         "map: \"blah\""
-          `filterShouldBe` ParseDoc.FilterMap (ParseDoc.SImmStringLiteral "blah")
+          `filterShouldBe` ParseDoc.FilterMap (ParseDoc.StringyLit "blah")
       it "'compact'" $ "compact" `filterShouldBe` ParseDoc.FilterCompact
       it "'sum'" $ do
         "sum" `filterShouldBe` ParseDoc.FilterSum Nothing
         "sum: \"category\""
-          `filterShouldBe` ParseDoc.FilterSum (Just (ParseDoc.SImmStringLiteral "category"))
+          `filterShouldBe` ParseDoc.FilterSum (Just (ParseDoc.StringyLit "category"))
       it "'uniq'" $ "uniq" `filterShouldBe` ParseDoc.FilterUniq
       it "'where'" $ do
         "where: \"x\""
-          `filterShouldBe` ParseDoc.FilterWhere (ParseDoc.SImmStringLiteral "x") Nothing
+          `filterShouldBe` ParseDoc.FilterWhere (ParseDoc.StringyLit "x") Nothing
         "where: blah, foo"
           `filterShouldBe` ParseDoc.FilterWhere
-            (ParseDoc.SImmVar ["blah"])
-            (Just (ParseDoc.SImmVar ["foo"]))
+            (ParseDoc.StringyVar ["blah"])
+            (Just (ParseDoc.StringyVar ["foo"]))
 
     describe "String filters" $ do
       it "'capitalize'" $ "capitalize" `filterShouldBe` ParseDoc.FilterCapitalize
@@ -239,32 +240,32 @@ filteredStatement = do
       it "'rstrip'" $ "rstrip" `filterShouldBe` ParseDoc.FilterRStrip
       it "'prepend'" $
         "prepend: \"blah\""
-          `filterShouldBe` ParseDoc.FilterPrepend (ParseDoc.SImmStringLiteral "blah")
+          `filterShouldBe` ParseDoc.FilterPrepend (ParseDoc.StringyLit "blah")
       it "'replace'" $
         "replace: the.string, \"blah\""
           `filterShouldBe` ParseDoc.FilterReplace
-            (ParseDoc.SImmVar ["the", "string"])
-            (ParseDoc.SImmStringLiteral "blah")
+            (ParseDoc.StringyVar ["the", "string"])
+            (ParseDoc.StringyLit "blah")
       it "'replace_first'" $
         "replace_first: \"blah\" , page.title "
           `filterShouldBe` ParseDoc.FilterReplaceFirst
-            (ParseDoc.SImmStringLiteral "blah")
-            (ParseDoc.SImmVar ["page", "title"])
+            (ParseDoc.StringyLit "blah")
+            (ParseDoc.StringyVar ["page", "title"])
       it "'remove'" $
         "remove: the.string"
-          `filterShouldBe` ParseDoc.FilterRemove (ParseDoc.SImmVar ["the", "string"])
+          `filterShouldBe` ParseDoc.FilterRemove (ParseDoc.StringyVar ["the", "string"])
       it "'remove_first'" $
         "remove_first: \"blah\""
-          `filterShouldBe` ParseDoc.FilterRemoveFirst (ParseDoc.SImmStringLiteral "blah")
+          `filterShouldBe` ParseDoc.FilterRemoveFirst (ParseDoc.StringyLit "blah")
       it "'size'" $ "size" `filterShouldBe` ParseDoc.FilterSize
       it "'slice'" $ do
         "slice: 4"
-          `filterShouldBe` ParseDoc.FilterSlice (ParseDoc.NImmNumber 4) Nothing
+          `filterShouldBe` ParseDoc.FilterSlice (ParseDoc.NumberyNum 4) Nothing
         "slice: 5, 9"
-          `filterShouldBe` ParseDoc.FilterSlice (ParseDoc.NImmNumber 5) (Just (ParseDoc.NImmNumber 9))
+          `filterShouldBe` ParseDoc.FilterSlice (ParseDoc.NumberyNum 5) (Just (ParseDoc.NumberyNum 9))
       it "'split'" $
         "split: \",\""
-          `filterShouldBe` ParseDoc.FilterSplit (ParseDoc.SImmStringLiteral ",")
+          `filterShouldBe` ParseDoc.FilterSplit (ParseDoc.StringyLit ",")
       it "'strip'" $ "strip" `filterShouldBe` ParseDoc.FilterStrip
       it "'strip_html'" $ "strip_html" `filterShouldBe` ParseDoc.FilterStripHtml
       it "'strip_newlines'" $ "strip_newlines" `filterShouldBe` ParseDoc.FilterStripNewlines
@@ -273,21 +274,21 @@ filteredStatement = do
       it "'newline_to_br'" $ "newline_to_br" `filterShouldBe` ParseDoc.FilterNewlineToBr
       it "'truncate'" $ do
         "truncate: 42"
-          `filterShouldBe` ParseDoc.FilterTruncate (ParseDoc.NImmNumber 42) Nothing
+          `filterShouldBe` ParseDoc.FilterTruncate (ParseDoc.NumberyNum 42) Nothing
         "truncate: 64 ,\"blah\""
           `filterShouldBe` ParseDoc.FilterTruncate
-            (ParseDoc.NImmNumber 64)
-            (Just (ParseDoc.SImmStringLiteral "blah"))
+            (ParseDoc.NumberyNum 64)
+            (Just (ParseDoc.StringyLit "blah"))
       it "'truncatewords'" $ do
         "truncatewords: 259"
-          `filterShouldBe` ParseDoc.FilterTruncateWords (ParseDoc.NImmNumber 259) Nothing
+          `filterShouldBe` ParseDoc.FilterTruncateWords (ParseDoc.NumberyNum 259) Nothing
         "truncatewords:49,my.ellipse"
           `filterShouldBe` ParseDoc.FilterTruncateWords
-            (ParseDoc.NImmNumber 49)
-            (Just (ParseDoc.SImmVar ["my", "ellipse"]))
+            (ParseDoc.NumberyNum 49)
+            (Just (ParseDoc.StringyVar ["my", "ellipse"]))
       it "'date'" $
         "date: \"%a, %b %d, %y\""
-          `filterShouldBe` ParseDoc.FilterDate (ParseDoc.SImmStringLiteral "%a, %b %d, %y")
+          `filterShouldBe` ParseDoc.FilterDate (ParseDoc.StringyLit "%a, %b %d, %y")
       it "'url_decode'" $ "url_decode" `filterShouldBe` ParseDoc.FilterUrlDecode
       it "'url_encode'" $ "url_encode" `filterShouldBe` ParseDoc.FilterUrlEncode
 
@@ -329,7 +330,7 @@ Baz
           [ ParseDoc.LiteralContent "\n",
             ParseDoc.Stmt
               ( ParseDoc.StmtIf
-                  (ParseDoc.ImmVar ["blah", "x"])
+                  (ParseDoc.immVar ["blah", "x"])
                   [ParseDoc.LiteralContent "\nFoo\n"]
                   []
                   (Just [ParseDoc.LiteralContent "\nBar\n"])
@@ -344,10 +345,10 @@ Baz
           (ParseDoc.ImmVar ["a"])
           [ ParseDoc.Stmt
               ( ParseDoc.StmtIf
-                  (ParseDoc.ImmVar ["b"])
+                  (ParseDoc.immVar ["b"])
                   [ ParseDoc.Stmt
                       ( ParseDoc.StmtIf
-                          (ParseDoc.ImmVar ["c"])
+                          (ParseDoc.immVar ["c"])
                           [ParseDoc.LiteralContent "Foo"]
                           []
                           (Just [ParseDoc.LiteralContent "Bar"])
@@ -363,7 +364,7 @@ Baz
       let input = "{% if 512 %}I love powers of two!{% endif %}"
       runDocParse input
         `shouldBe` parsedIfStmt
-          (ParseDoc.ImmNumber 512)
+          (ParseDoc.ImmNum 512)
           [ParseDoc.LiteralContent "I love powers of two!"]
           []
           Nothing
@@ -385,14 +386,14 @@ Foo
           ( docWithEmptyFM
               [ ParseDoc.Stmt
                   ( ParseDoc.StmtIf
-                      (ParseDoc.ImmVar ["x"])
+                      (ParseDoc.immVar ["x"])
                       [ParseDoc.LiteralContent "\nBlah"]
                       []
                       (Just [ParseDoc.LiteralContent "Not Blah\n"])
                   ),
                 ParseDoc.Stmt
                   ( ParseDoc.StmtIf
-                      (ParseDoc.ImmVar ["y"])
+                      (ParseDoc.immVar ["y"])
                       [ParseDoc.LiteralContent "\n Baz"]
                       []
                       Nothing
