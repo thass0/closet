@@ -299,6 +299,86 @@ filteredStatement = do
 
 ifStatement :: Spec
 ifStatement = do
+  describe "boolean conditions" $ do
+    let parseCondition con = runDocParse $ "{% if " <> con <> " %}Blah{% endif %}"
+        parsedCondition e = Right $ docWithEmptyFM
+          [ParseDoc.Stmt
+            ( ParseDoc.StmtIf
+                e
+                [ParseDoc.Cont "Blah"]
+                []
+                Nothing
+            )
+          ]
+    it "'and' and 'or' are right-associative" $ do
+      parseCondition "a and b or c"
+        `shouldBe`
+          parsedCondition
+            (ParseDoc.Expr
+              (ParseDoc.ExprAnd
+                (ParseDoc.ImmVar ["a"])
+                (ParseDoc.ExprOr (ParseDoc.ImmVar ["b"]) (ParseDoc.ImmVar ["c"]))
+              )
+              []
+            )
+      parseCondition "a or b and c or d"
+        `shouldBe`
+          parsedCondition
+            (ParseDoc.Expr
+              (ParseDoc.ExprOr
+                (ParseDoc.ImmVar ["a"])
+                (ParseDoc.ExprAnd
+                  (ParseDoc.ImmVar ["b"])
+                  (ParseDoc.ExprOr
+                    (ParseDoc.ImmVar ["c"])
+                    (ParseDoc.ImmVar ["d"])
+                  )
+                )
+              )
+              []
+            )
+
+    it "'and'" $ parseCondition "a and b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprAnd (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+    it "'or'" $ parseCondition "a or b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprOr (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+    it "'=='" $ parseCondition "a == b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprEq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+    it "'!='" $ parseCondition "a != b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprNeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+    it "'>'" $ parseCondition "a > b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprGt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+    it "'<'" $ parseCondition "a < b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprLt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+    it "'>='" $ parseCondition "a >= b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprGeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+    it "'<='" $ parseCondition "a <= b"
+      `shouldBe`
+        parsedCondition
+          ( ParseDoc.Expr
+            ( ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+
   describe "if statement" $ do
     it "simple if statement" $ do
       let input =

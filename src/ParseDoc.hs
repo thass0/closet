@@ -63,14 +63,14 @@ data BaseExpr
   = ImmVar Var 
   | ImmStrLit StrLit
   | ImmNum Number
-  | ExprAnd Expr Expr  -- and
-  | ExprOr Expr Expr  -- or 
-  | ExprEq Expr Expr  -- ==
-  | ExprNeq Expr Expr  -- !=
-  | ExprGt Expr Expr  -- >
-  | ExprLt Expr Expr  -- <
-  | ExprGeq Expr Expr  -- >=
-  | ExprLeq Expr Expr  -- <=
+  | ExprAnd BaseExpr BaseExpr  -- and
+  | ExprOr BaseExpr BaseExpr  -- or 
+  | ExprEq BaseExpr BaseExpr  -- ==
+  | ExprNeq BaseExpr BaseExpr  -- !=
+  | ExprGt BaseExpr BaseExpr  -- >
+  | ExprLt BaseExpr BaseExpr  -- <
+  | ExprGeq BaseExpr BaseExpr  -- >=
+  | ExprLeq BaseExpr BaseExpr  -- <=
   deriving (Show, Eq)
 
 data Stringy = StringyVar Var | StringyLit StrLit 
@@ -150,7 +150,7 @@ type Parser = Parsec Void Text
 spaceConsumer :: Parser ()
 spaceConsumer = L.space space1 empty empty
 
--- | Run the given parser and consume trailing white space.
+-- | Run the given parser and consume trailing white space (whitespace is optional).
 pLexeme :: Parser a -> Parser a
 pLexeme = L.lexeme spaceConsumer
 
@@ -252,7 +252,7 @@ pFrontMatter = do
 
 -- * Expressions
 
--- ** Variables
+-- ** Immediate expressions
 
 pIdent :: Parser Ident
 pIdent = pIdentInner <&> pack
@@ -267,50 +267,91 @@ pIdents =  sepBy1 pIdent (string ".")
 pVar :: Parser Var
 pVar = pIdents
 
--- ** Numbers
-
 pInteger :: Parser Int
 pInteger = pIntegerInner <?> "number"
   where pIntegerInner = do
           minusSign <- optional (char '-')
           value <- pLexeme L.decimal
-          case minusSign of
-            Just _ -> pure $ negate value
-            Nothing -> pure value
+          if isJust minusSign
+            then pure (negate value)
+            else pure value
 
-pNumber :: Parser Number
-pNumber = pInteger
+pNum :: Parser Number
+pNum = pInteger
 
--- ** String literals
-
-pStringLiteral :: Parser Text
-pStringLiteral = startChar *> bodyClosed <&> pack
+pStrLit :: Parser Text
+pStrLit = startChar *> bodyClosed <&> pack
   where
     startChar = char '\"' <?> "start of string"
     bodyClosed = manyTill L.charLiteral endChar <?> "body of string"
     endChar = char '\"' <?> "end of string"
 
--- ** Immediate expressions
+
+pImmExpr :: Parser BaseExpr 
+pImmExpr = choice $ try <$>
+  [ pVar <&> ImmVar
+  , pNum <&> ImmNum
+  , pStrLit <&> ImmStrLit
+  ]
+
+-- ** Base expressions
+
+type BaseOp = BaseExpr -> BaseExpr -> BaseExpr
 
 pBaseExpr :: Parser BaseExpr
-pBaseExpr = choice $ try <$>
-  [ pVar <&> ImmVar
-  , pNumber <&> ImmNum
-  , pStringLiteral <&> ImmStrLit
-  ]
+pBaseExpr = do
+  lhs <- pLexeme pImmExpr
+  rhss <- many $ (,) <$> pOperand <*> pLexeme pImmExpr
+  pure $ applyTransformed lhs (foldl (transformParsed lhs) [] rhss)
+  where
+    pOperand :: Parser BaseOp
+    pOperand = choice $
+      [ pSymbol "and" $> ExprAnd
+      , pSymbol "or" $> ExprOr
+      ]
+
+    -- Example of how a right-associative expression is transformed:
+    --
+    -- Input:            "a and b or c and d"
+    -- Parsed:           lhs=a, rhss=[(and, b), (or, c), (and, d)]
+    -- transformParsed:  [((and, a), b), ((or, b), c), ((and, c), d)]
+    -- applyTransformed: (and a (or b (and c d)))
+
+    transformParsed
+      :: BaseExpr
+      -> [((BaseOp, BaseExpr), BaseExpr)]
+      -> (BaseOp, BaseExpr)
+      -> [((BaseOp, BaseExpr), BaseExpr)]
+    transformParsed lhs [] (newOp, newRhs) = [((newOp, lhs), newRhs)]
+    transformParsed _ acc (newOp, newRhs) =
+      let (oldPair, newLhs) = last acc
+          acc' = init acc
+      in acc' ++ [(oldPair, newLhs), ((newOp, newLhs), newRhs)]
+
+    applyTransformed
+      :: BaseExpr
+      -> [((BaseOp, BaseExpr), BaseExpr)]
+      -> BaseExpr
+    applyTransformed lhs t = fromMaybe lhs (foldr applyOps Nothing t)
+
+    applyOps
+      :: ((BaseOp, BaseExpr), BaseExpr)
+      -> Maybe BaseExpr
+      -> Maybe BaseExpr
+    applyOps ((op, lhs), initRhs) Nothing = Just (op lhs initRhs)
+    applyOps ((op, lhs), _) (Just rhs) = Just (op lhs rhs)
 
 pStringy :: Parser Stringy
 pStringy = choice $ try <$>
   [ pVar <&> StringyVar
-  , pStringLiteral <&> StringyLit
+  , pStrLit <&> StringyLit
   ]
 
 pNumbery :: Parser Numbery
 pNumbery = choice $ try <$>
   [ pVar <&> NumberyVar
-  , pNumber <&> NumberyNum
+  , pNum <&> NumberyNum
   ]
-
 
 pFilterExpr :: Parser FilterExpr
 pFilterExpr = choice $ try <$>
@@ -397,15 +438,14 @@ pFilterExpr = choice $ try <$>
 
 pExpr :: Parser Expr
 pExpr = do
-  imm <- pLexeme pBaseExpr
+  base <- pLexeme pBaseExpr
   filters <- many (pSymbol' "|" >> pLexeme pFilterExpr)
-  pure $ Expr imm filters
+  pure $ Expr base filters
 
 -- * Statements
 
 pIfStmt :: Parser (StripTag Stmt)
 pIfStmt = do
-  -- TODO: Logical operator (==, and, etc.)
   sTagIf <- pTag "{%" (pSymbol "if" >> pExpr) "%}" 
   consequent <- many (try pBlock)
 
