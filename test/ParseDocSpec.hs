@@ -30,23 +30,23 @@ docWithEmptyFM p =
 parsedImmExpr :: ParseDoc.BaseExpr -> Either String ParseDoc.Doc
 parsedImmExpr imm =
   Right
-    (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr imm []))])
+    (docWithEmptyFM [ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr imm []))])
 
 parsedExpr :: ParseDoc.BaseExpr -> [ParseDoc.FilterExpr] -> Either String ParseDoc.Doc
 parsedExpr imm f =
   Right
-    (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr imm f))])
+    (docWithEmptyFM [ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr imm f))])
 
-parsedIfStmt ::
+parsedIfTag ::
   ParseDoc.BaseExpr ->
   [ParseDoc.Block] ->
   [(ParseDoc.BaseExpr, [ParseDoc.Block])] ->
   Maybe [ParseDoc.Block] ->
   Either String ParseDoc.Doc
-parsedIfStmt prd' consequent alts' final =
+parsedIfTag prd' consequent alts' final =
   let alts = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> alts'
       prd = ParseDoc.Expr prd' []
-  in Right (docWithEmptyFM [ParseDoc.Stmt (ParseDoc.StmtIf prd consequent alts final)])
+  in Right (docWithEmptyFM [ParseDoc.Tag (ParseDoc.TagIf prd consequent alts final)])
 
 -- * Specs
 
@@ -54,7 +54,7 @@ spec :: Spec
 spec = do
   describe "Parse documents" $ do
     frontMatter
-    statement
+    tag
     it "white space at start of input" $ do
       runDocParse "   This is my entire document! " `shouldBe` Right (docWithEmptyFM [ParseDoc.Cont "   This is my entire document! "])
 
@@ -123,19 +123,19 @@ Blah is the best filler word possible.|]
       let input = "---\ntitle: This blog has a front matter that does not end.\n"
       runDocParse input `shouldSatisfy` isLeft
 
--- ** Statement tests
+-- ** tag tests
 
-statement :: Spec
-statement = do
-  describe "Parse statements" $ do
-    expressStatement
-    filteredStatement
-    ifStatement
+tag :: Spec
+tag = do
+  describe "Parse tags" $ do
+    expresstag
+    filteredtag
+    iftag
 
-expressStatement :: Spec
-expressStatement = do
-  describe "Express statement" $ do
-    it "Simple express statement" $ do
+expresstag :: Spec
+expresstag = do
+  describe "Express tag" $ do
+    it "Simple express tag" $ do
       runDocParse "{{ blah.x }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah", "x"])
       runDocParse "{{ blah.x.y.hello.world }}"
@@ -148,24 +148,24 @@ expressStatement = do
         `shouldBe` parsedImmExpr (ParseDoc.ImmNum (-61))
       runDocParse "{{blah}}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah"])
-    it "Invalid express statement" $ do
+    it "Invalid express tag" $ do
       runDocParse "{{ blah!x }}" `shouldSatisfy` isLeft
       runDocParse "{{ blah.x. }}" `shouldSatisfy` isLeft
       runDocParse "{{ blah * 91 }}" `shouldSatisfy` isLeft
       runDocParse "{{ 514blah }}" `shouldSatisfy` isLeft
-    it "strip whitespace in express statements" $ do
+    it "strip whitespace in express tags" $ do
       runDocParse " foo {{- blah -}} bar "
         `shouldBe` Right
           ( docWithEmptyFM
               [ ParseDoc.Cont " foo",
-                ParseDoc.Stmt (ParseDoc.StmtExpress (ParseDoc.Expr (ParseDoc.ImmVar ["blah"]) [])),
+                ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr (ParseDoc.ImmVar ["blah"]) [])),
                 ParseDoc.Cont "bar "
               ]
           )
 
-filteredStatement :: Spec
-filteredStatement = do
-  describe "Filtered statement" $ do
+filteredtag :: Spec
+filteredtag = do
+  describe "Filtered tag" $ do
     let filterShouldBe filterString fil =
           runDocParse ("{{ x | " <> filterString <> " }}")
             `shouldBe` parsedExpr (ParseDoc.ImmVar ["x"]) [fil]
@@ -297,13 +297,13 @@ filteredStatement = do
         "default: site.title"
           `filterShouldBe` ParseDoc.FilterDefault (ParseDoc.ImmVar ["site", "title"])
 
-ifStatement :: Spec
-ifStatement = do
+iftag :: Spec
+iftag = do
   describe "boolean conditions" $ do
     let parseCondition con = runDocParse $ "{% if " <> con <> " %}Blah{% endif %}"
         parsedCondition e = Right $ docWithEmptyFM
-          [ParseDoc.Stmt
-            ( ParseDoc.StmtIf
+          [ParseDoc.Tag
+            ( ParseDoc.TagIf
                 e
                 [ParseDoc.Cont "Blah"]
                 []
@@ -379,8 +379,8 @@ ifStatement = do
           ( ParseDoc.Expr
             ( ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
 
-  describe "if statement" $ do
-    it "simple if statement" $ do
+  describe "if tag" $ do
+    it "simple if tag" $ do
       let input =
             [r|{% if say_my_name %}
 Heisenberg
@@ -388,12 +388,12 @@ Heisenberg
 Mr. White
 {% endif %}|]
       runDocParse input
-        `shouldBe` parsedIfStmt
+        `shouldBe` parsedIfTag
           (ParseDoc.ImmVar ["say_my_name"])
           [ParseDoc.Cont "\nHeisenberg\n"]
           []
           (Just [ParseDoc.Cont "\nMr. White\n"])
-    it "nested if statements" $ do
+    it "nested if tags" $ do
       let input =
             [r|{% if blah %}
 {% if blah.x %}
@@ -405,11 +405,11 @@ Bar
 Baz
 {% endif %}|]
       runDocParse input
-        `shouldBe` parsedIfStmt
+        `shouldBe` parsedIfTag
           (ParseDoc.ImmVar ["blah"])
           [ ParseDoc.Cont "\n",
-            ParseDoc.Stmt
-              ( ParseDoc.StmtIf
+            ParseDoc.Tag
+              ( ParseDoc.TagIf
                   (ParseDoc.immVar ["blah", "x"])
                   [ParseDoc.Cont "\nFoo\n"]
                   []
@@ -421,13 +421,13 @@ Baz
           (Just [ParseDoc.Cont "\nBaz\n"])
       let input2 = "{%if a%}{%if b%}{%if c%}Foo{%else%}Bar{%endif%}{%else%}Baz{%endif%}{%else%}Blah{%endif%}"
       runDocParse input2
-        `shouldBe` parsedIfStmt
+        `shouldBe` parsedIfTag
           (ParseDoc.ImmVar ["a"])
-          [ ParseDoc.Stmt
-              ( ParseDoc.StmtIf
+          [ ParseDoc.Tag
+              ( ParseDoc.TagIf
                   (ParseDoc.immVar ["b"])
-                  [ ParseDoc.Stmt
-                      ( ParseDoc.StmtIf
+                  [ ParseDoc.Tag
+                      ( ParseDoc.TagIf
                           (ParseDoc.immVar ["c"])
                           [ParseDoc.Cont "Foo"]
                           []
@@ -440,15 +440,15 @@ Baz
           ]
           []
           (Just [ParseDoc.Cont "Blah"])
-    it "if statement without alternative" $ do
+    it "if tag without alternative" $ do
       let input = "{% if 512 %}I love powers of two!{% endif %}"
       runDocParse input
-        `shouldBe` parsedIfStmt
+        `shouldBe` parsedIfTag
           (ParseDoc.ImmNum 512)
           [ParseDoc.Cont "I love powers of two!"]
           []
           Nothing
-    it "white space stripped in if statement" $ do
+    it "white space stripped in if tag" $ do
       let input =
             [r|
 {%- if x %}
@@ -464,15 +464,15 @@ Foo
       runDocParse input
         `shouldBe` Right
           ( docWithEmptyFM
-              [ ParseDoc.Stmt
-                  ( ParseDoc.StmtIf
+              [ ParseDoc.Tag
+                  ( ParseDoc.TagIf
                       (ParseDoc.immVar ["x"])
                       [ParseDoc.Cont "\nBlah"]
                       []
                       (Just [ParseDoc.Cont "Not Blah\n"])
                   ),
-                ParseDoc.Stmt
-                  ( ParseDoc.StmtIf
+                ParseDoc.Tag
+                  ( ParseDoc.TagIf
                       (ParseDoc.immVar ["y"])
                       [ParseDoc.Cont "\n Baz"]
                       []
@@ -481,7 +481,7 @@ Foo
                 ParseDoc.Cont "Foo\n"
               ]
           )
-    it "if statements with elsif and else branches" $ do
+    it "if tags with elsif and else branches" $ do
       let input =
             [r|
 {%- if x -%}
@@ -493,13 +493,13 @@ Baz
 {%- endif -%}
 |]
       runDocParse input
-      `shouldBe` parsedIfStmt
+      `shouldBe` parsedIfTag
         (ParseDoc.ImmVar ["x"])
         [ParseDoc.Cont "Foo"]
         [ (ParseDoc.ImmVar ["y"], [ParseDoc.Cont "Bar"])
         ]
         (Just [ParseDoc.Cont "Baz"])
-    it "if statements with only elsif branches" $ do
+    it "if tags with only elsif branches" $ do
       let input =
             [r|
 {%- if one -%}
@@ -513,7 +513,7 @@ Four
 {%- endif -%}
 |]
       runDocParse input
-        `shouldBe` parsedIfStmt
+        `shouldBe` parsedIfTag
           (ParseDoc.ImmVar ["one"])
           [ParseDoc.Cont "One"]
           [ (ParseDoc.ImmVar ["two"], [ParseDoc.Cont "Two"])

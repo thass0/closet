@@ -2,7 +2,7 @@ module ParseDoc
   ( Doc (..)
   , FrontMatter
   , Block (..)
-  , Stmt (..)
+  , Tag (..)
   , Expr (..)
   , immVar
   , BaseExpr (..)
@@ -37,20 +37,20 @@ data Doc = Doc
 type FrontMatter = Y.Value
 
 data Block
-  = Stmt Stmt
+  = Tag Tag
   | Cont Text
   deriving (Show, Eq)
 
-data Stmt
-  = StmtIf Expr [Block] [(Expr, [Block])] (Maybe [Block])  -- ^ Predicate Consequent Alternatives Final
-  | StmtFor
-  | StmtAssign
-  | StmtUnless
-  | StmtCase
-  | StmtCapture
-  | StmtIncrement
-  | StmtDecrement
-  | StmtExpress Expr
+data Tag
+  = TagIf Expr [Block] [(Expr, [Block])] (Maybe [Block])  -- ^ Predicate Consequent Alternatives Final
+  | TagFor
+  | TagAssign
+  | TagUnless
+  | TagCase
+  | TagCapture
+  | TagIncrement
+  | TagDecrement
+  | TagExpress Expr
   deriving (Show, Eq)
 
 data Expr = Expr BaseExpr [FilterExpr]
@@ -172,70 +172,76 @@ pAnything :: Parser Char
 pAnything = satisfy (const True)
 
 
--- | Store how whitespace should be stripped in and around a tag.
-data StripTag a = StripTag
+-- Raw content that may still need to be formatted by stripping
+-- away whitespace in front and at the end of the content. This
+-- record stores information on how to format the content along
+-- with the content itself.
+data Unformatted a = Unformatted
   { beforeTag :: Bool
   , afterTag :: Bool
-  , tag :: a
+  , inner :: a
   } deriving (Show, Eq)
 
-instance Functor StripTag where
-  fmap f (StripTag b a t) = StripTag b a (f t)
+instance Functor Unformatted where
+  fmap f (Unformatted b a t) = Unformatted b a (f t)
 
 -- | Strip whitespace around the given list of blocks.
-stripBlocks :: [StripTag Block] -> [Block]
-stripBlocks = stripNestedBlocks False False
+formatBlocks :: [Unformatted Block] -> [Block]
+formatBlocks = formatNestedBlocks False False
 
 -- | Strip whitespace around the given list of blocks.
 --   In @stripNestedBlock beforeFirst afterLast blocks@, @globalBefore@
 --   and @afterLast@ dictate what how whitespace at the start of the first
 --   block and at the end of the last block should be treated.
-stripNestedBlocks :: Bool -> Bool -> [StripTag Block] -> [Block]
-stripNestedBlocks beforeFirst afterLast bs =
-  foldr stripAfterIter [] (foldl stripBeforeIter [] bs)
+formatNestedBlocks :: Bool -> Bool -> [Unformatted Block] -> [Block]
+formatNestedBlocks beforeFirst afterLast bs =
+  foldr stripContEnds [] (foldl stripContStarts [] bs)
   where
-    stripBeforeIter :: [StripTag Block] -> StripTag Block -> [StripTag Block]
-    stripBeforeIter [] (StripTag True after t) = [StripTag False after (stripBlockBefore t)]
-    stripBeforeIter [] (StripTag False after t) =
-      [StripTag False after (if beforeFirst then stripBlockBefore t else t)]
-    stripBeforeIter acc (StripTag True a t) =
-      init acc ++ [stripBlockAfter <$> last acc, StripTag False a (stripBlockBefore t)]
-    stripBeforeIter acc st@(StripTag False _ _) = acc ++ [st] 
+    -- Strip whitespace from the start and end of all content blocks.
 
-    stripAfterIter :: StripTag Block -> [Block] -> [Block]
-    stripAfterIter (StripTag _ True t) [] = stripBlockAfter t ?: []
-    stripAfterIter (StripTag _ False t) [] =
-      (if afterLast then stripBlockAfter t else t) ?: []
-    stripAfterIter (StripTag _ True t) acc =
-      stripBlockAfter t ?: (stripBlockBefore (head acc) ?: tail acc)
-    stripAfterIter (StripTag _ False t) acc = t ?: acc
+    stripContStarts :: [Unformatted Block] -> Unformatted Block -> [Unformatted Block]
+    stripContStarts [] (Unformatted True after t) =
+      [Unformatted False after (stripContStart t)]
+    stripContStarts [] (Unformatted False after t) =
+      [Unformatted False after (if beforeFirst then stripContStart t else t)]
+    stripContStarts acc (Unformatted True a t) =
+      init acc ++ [ stripContEnd <$> last acc
+                  , Unformatted False a (stripContStart t)
+                  ]
+    stripContStarts acc st@(Unformatted False _ _) = acc ++ [st]
 
-    stripBlockAfter :: Block -> Block
-    stripBlockAfter b =
+    stripContEnds :: Unformatted Block -> [Block] -> [Block]
+    stripContEnds (Unformatted _ True t) [] = stripContEnd t ?: []
+    stripContEnds (Unformatted _ False t) [] =
+      (if afterLast then stripContEnd t else t) ?: []
+    stripContEnds (Unformatted _ True t) acc =
+      stripContEnd t ?: (stripContStart (head acc) ?: tail acc)
+    stripContEnds (Unformatted _ False t) acc = t ?: acc
+
+    stripContEnd :: Block -> Block
+    stripContEnd b =
       case b of
         (Cont c) -> Cont (stripEnd c)
         _ -> b
 
-    stripBlockBefore :: Block -> Block
-    stripBlockBefore b =
+    stripContStart :: Block -> Block
+    stripContStart b =
       case b of
         (Cont c) -> Cont (stripStart c)
         _ -> b
     
-    -- Cons blocks but drop any blocks that's an empty literal
-    -- content string. Used in 'stripAfterIter' to drop all content
-    -- that was purely made of whitespace and stripped.
+    -- 'Cons' blocks but drop any blocks that are empty content strings.
     (?:) :: Block -> [Block] -> [Block]
     (Cont "") ?: bs' = bs'
     b ?: bs' = b : bs'
 
 
-pTag :: Text -> Parser a -> Text -> Parser (StripTag a)
-pTag open x close = do
+inTag :: Text -> Parser a -> Text -> Parser (Unformatted a)
+inTag open x close = do
   sb <- (string open *> optional (string "-") <* space) <&> isJust
   ret <- x
   sa <- (space *> optional (string "-") <* string close) <&> isJust
-  pure StripTag { beforeTag = sb, afterTag = sa, tag = ret }
+  pure Unformatted { beforeTag = sb, afterTag = sa, inner = ret }
 
 
 -- * Front Matter
@@ -305,7 +311,7 @@ pBaseExpr = do
   pure $ applyTransformed lhs (foldl (transformParsed lhs) [] rhss)
   where
     pOperand :: Parser BaseOp
-    pOperand = choice $
+    pOperand = choice
       [ pSymbol "and" $> ExprAnd
       , pSymbol "or" $> ExprOr
       ]
@@ -442,86 +448,88 @@ pExpr = do
   filters <- many (pSymbol' "|" >> pLexeme pFilterExpr)
   pure $ Expr base filters
 
--- * Statements
+-- * Tags
 
-pIfStmt :: Parser (StripTag Stmt)
-pIfStmt = do
-  sTagIf <- pTag "{%" (pSymbol "if" >> pExpr) "%}" 
-  consequent <- many (try pBlock)
+pIfTag :: Parser (Unformatted Tag)
+pIfTag = do
+  sTagIf <- inTag "{%" (pSymbol "if" >> pExpr) "%}"
+  conseq <- many (try pBlock)
 
   elsifBranches <- many . try $ do
-    sTagElsif <- pTag "{%" (pSymbol "elsif" >> pExpr) "%}"
+    sTagElsif <- inTag "{%" (pSymbol "elsif" >> pExpr) "%}"
     blocks <- many (try pBlock)
     pure (sTagElsif, blocks)
 
   elseBranch <- optional . try $ do
-    sTagElse <- pTag "{%" (string "else") "%}" 
+    sTagElse <- inTag "{%" (string "else") "%}"
     blocks <- many (try pBlock)
     pure (sTagElse, blocks)
 
-  sTagEndif <- pTag "{%" (string "endif") "%}" 
+  sTagEndif <- inTag "{%" (string "endif") "%}"
 
   let elsifTags = fst <$> elsifBranches
   case elseBranch of
     Just (sTagElse, final) -> do
-      let strippedAlts = stripParsedElsifs (beforeTag sTagElse) elsifBranches
-      let beforeCons = afterTag sTagIf
-          afterCons = case elsifTags of
+      let fmtAlts = formatElsifBlocks (beforeTag sTagElse) elsifBranches
+      let beforeConseq = afterTag sTagIf
+          afterConseq = case elsifTags of
                         (firstTag : _) -> beforeTag firstTag
                         _ -> beforeTag sTagElse
-          strippedCons = stripNestedBlocks beforeCons afterCons consequent
+          fmtConseq = formatNestedBlocks beforeConseq afterConseq conseq
       let beforeFinal = case elsifTags of
                           [] -> afterTag sTagElse
                           eb -> let lastTag = last eb in afterTag lastTag
           afterFinal = beforeTag sTagEndif
-          strippedFinal = stripNestedBlocks beforeFinal afterFinal final
-      pure $ StripTag (beforeTag sTagIf)
+          fmtFinal = formatNestedBlocks beforeFinal afterFinal final
+      pure $ Unformatted (beforeTag sTagIf)
                       (afterTag sTagEndif)
-                      (StmtIf (tag sTagIf) strippedCons strippedAlts (Just strippedFinal))
+                      (TagIf (inner sTagIf) fmtConseq fmtAlts (Just fmtFinal))
     Nothing ->
-      let strippedAlts = stripParsedElsifs (beforeTag sTagEndif) elsifBranches
-          beforeCons = afterTag sTagIf
-          afterCons = case elsifTags of
+      let fmtAlts = formatElsifBlocks (beforeTag sTagEndif) elsifBranches
+          beforeConseq = afterTag sTagIf
+          afterConseq = case elsifTags of
                         (firstTag : _) -> beforeTag firstTag
                         _ -> beforeTag sTagEndif
-          strippedCons = stripNestedBlocks beforeCons afterCons consequent
-      in pure $ StripTag (beforeTag sTagIf)
+          fmtConseq = formatNestedBlocks beforeConseq afterConseq conseq
+      in pure $ Unformatted (beforeTag sTagIf)
                          (afterTag sTagEndif)
-                         (StmtIf (tag sTagIf) strippedCons strippedAlts Nothing)
+                         (TagIf (inner sTagIf) fmtConseq fmtAlts Nothing)
 
--- | @stripParsedElsifs stripAfterLast parsedElsifs@ strips whitespace from elsifs.
-stripParsedElsifs :: Bool -> [(StripTag Expr, [StripTag Block])] -> [(Expr, [Block])]
-stripParsedElsifs afterLast blocks =
-  let collected = foldr collectStripInfo [] blocks
-  in stripWithInfo <$> collected
+-- | Use @formatElsifBlocks stripAfterLast parsedElsifs@ to format parsed 'elsif' blocks.
+formatElsifBlocks :: Bool -> [(Unformatted Expr, [Unformatted Block])] -> [(Expr, [Block])]
+formatElsifBlocks afterLast blocks =
+  let info = foldr collectFormatInfo [] blocks
+  in formatWithInfo <$> info
   where
-    -- Elsif alternatives are parsed as a list of pairs of a predicate and a list of blocks to execute
-    -- if the predicate is true. Those blocks (called an alternative) need to know if white space
-    -- should be stripped _after_ their predicate and if white space should be tripped _before_
-    -- the tag that follows. The tag that follows the last alternative is not part of the list anymore.
-    -- This moves all information about how to strip an alternative into the list element of that
-    -- alternative itself. Use it as a foldr.
-    collectStripInfo
-      :: (StripTag Expr, [StripTag Block])  -- ^ Current.
-      -> [(StripTag Expr, StripTag [StripTag Block])]  -- ^ Accumulator
-      -> [(StripTag Expr, StripTag [StripTag Block])]
-    collectStripInfo (expr, alt) [] = [(expr, StripTag (afterTag expr) afterLast alt)]
-    collectStripInfo (expr, alt) ((afterExpr, afterAlt):acc)
-      = (expr, StripTag (afterTag expr) (beforeTag afterExpr) alt)
+    -- Elsif alternatives are parsed as a list of pairs of a predicate and a
+    -- list of blocks to execute if the predicate is true. Those blocks (called
+    -- an alternative) need to know if white space should be stripped away
+    -- _after_ their predicate and if white space should be stripped _before_
+    -- the tag that follows. The tag that follows the last alternative is not
+    -- part of the list anymore. 'collectFormatInfo' moves all information about
+    -- how to format an alternative into the list element of that alternative itself.
+    collectFormatInfo
+      :: (Unformatted Expr, [Unformatted Block])  -- ^ Current.
+      -> [(Unformatted Expr, Unformatted [Unformatted Block])]  -- ^ Accumulator
+      -> [(Unformatted Expr, Unformatted [Unformatted Block])]
+    collectFormatInfo (expr, alt) [] = [(expr, Unformatted (afterTag expr) afterLast alt)]
+    collectFormatInfo (expr, alt) ((afterExpr, afterAlt):acc)
+      = (expr, Unformatted (afterTag expr) (beforeTag afterExpr) alt)
       : (afterExpr, afterAlt)
       : acc
  
-    stripWithInfo :: (StripTag Expr, StripTag [StripTag Block]) -> (Expr, [Block])
-    stripWithInfo (StripTag _ _ expr, StripTag beforeAlt afterAlt alt) =
-      (expr, stripNestedBlocks beforeAlt afterAlt alt)
+    formatWithInfo :: (Unformatted Expr, Unformatted [Unformatted Block]) -> (Expr, [Block])
+    formatWithInfo (Unformatted _ _ expr, Unformatted beforeAlt afterAlt alt) =
+      (expr, formatNestedBlocks beforeAlt afterAlt alt)
 
-stmtLookAhead :: Text -> Parser Text
-stmtLookAhead name = lookAhead (string "{%" >> optional (string "-") >> space >> pSymbol name)
 
-pStmt :: Parser (StripTag Stmt)
-pStmt = choice  -- Note that there is no try here.
-  [ pTag "{{" (pExpr <&> StmtExpress) "}}"
-  , stmtLookAhead "if" >> pIfStmt
+curlyTagLookAhead :: Text -> Parser Text
+curlyTagLookAhead name = lookAhead (string "{%" >> optional (string "-") >> space >> pSymbol name)
+
+pTag :: Parser (Unformatted Tag)
+pTag = choice  -- Note that there is no 'try' here.
+  [ inTag "{{" (pExpr <&> TagExpress) "}}"
+  , curlyTagLookAhead "if" >> pIfTag
   ]
 
 tagLookAhead :: Parser Text
@@ -530,24 +538,25 @@ tagLookAhead = lookAhead $ choice (string <$> ["{{", "{%", "{{-", "{%-"])
 pCont :: Parser Text
 pCont = someTill pAnything endOfContent <&> pack
   where
-    endOfContent = (tagLookAhead $> ()) <|> eof
+    endOfContent = tagLookAhead' <|> eof
+    tagLookAhead' = tagLookAhead $> ()  -- Type stuff only.
 
-pBlock :: Parser (StripTag Block)
+pBlock :: Parser (Unformatted Block)
 pBlock = choice
-  [ tagLookAhead >> pStmt <&> fmap Stmt
-  , pCont <&> StripTag False False . Cont
+  [ tagLookAhead >> pTag <&> fmap Tag
+  , pCont <&> Unformatted False False . Cont
   ]
 
 -- * Document
 
 pDocument :: Parser Doc
 pDocument = do
-  -- Parse an optional front matter. If @---@ is found, we commit
+  -- Parse an optional front matter. If '---' is found, we commit
   -- to parsing the front matter and don't fall back.
   fm <- optional $ do
     void $ try (lookAhead (space >> pSymbol "---"))
     void space
     pFrontMatter
-  blocks' <- many pBlock <&> stripBlocks
+  blocks' <- many pBlock <&> formatBlocks
   let blocks = if null blocks' then [Cont ""] else blocks'
   pure $ Doc (fromMaybe (Y.object []) fm) blocks
