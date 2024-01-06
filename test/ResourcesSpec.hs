@@ -1,11 +1,10 @@
 module ResourcesSpec (spec) where
 
-import Test.Hspec
+import Control.Monad
+import Resources
 import System.Directory
 import System.FilePath
-import Control.Monad
-
-import Resources
+import Test.Hspec
 
 spec :: Spec
 spec = do

@@ -1,8 +1,8 @@
-module CanonPath
-  ( CanonPath
-  , fromPath
-  , toPath
-  ) where
+module CanonPath (
+  CanonPath,
+  fromPath,
+  toPath,
+) where
 
 import System.Directory
 

@@ -23,10 +23,9 @@ runDocParse = runTestParse ParseDoc.pDocument
 doc :: [ParseDoc.Block] -> ParseDoc.Doc
 doc p =
   ParseDoc.Doc
-    { docFrontMatter = Y.object [],
-      docBlocks = p
+    { docFrontMatter = Y.object []
+    , docBlocks = p
     }
-
 
 -- * Tests
 
@@ -41,7 +40,6 @@ spec = do
       runDocParse "   This is my entire document! "
         `shouldBe` Right
           (doc [ParseDoc.Cont "   This is my entire document! "])
-
 
 -- ** Tests on parsing the front matter
 
@@ -62,15 +60,15 @@ children:
 This is the content of this page!|]
       runDocParse input
         `shouldBe` ( Right $
-                       ParseDoc.Doc
-                         { docFrontMatter =
-                             Y.object
-                               [ "name" .= ("This is my name" :: Text),
-                                 "age" .= (41 :: Int),
-                                 "children" .= Y.array ["Child1", "Child2", "Child3"]
-                               ],
-                           docBlocks = [ParseDoc.Cont "This is the content of this page!"]
-                         }
+                      ParseDoc.Doc
+                        { docFrontMatter =
+                            Y.object
+                              [ "name" .= ("This is my name" :: Text)
+                              , "age" .= (41 :: Int)
+                              , "children" .= Y.array ["Child1", "Child2", "Child3"]
+                              ]
+                        , docBlocks = [ParseDoc.Cont "This is the content of this page!"]
+                        }
                    )
 
     it "Allow \"---\" inside the front matter" $ do
@@ -82,12 +80,12 @@ title: "Blah --- my personal blog about Blah!"
 Blah is the best filler word possible.|]
       runDocParse input
         `shouldBe` ( Right $
-                       ParseDoc.Doc
-                         { docFrontMatter =
-                             Y.object
-                               ["title" .= ("Blah --- my personal blog about Blah!" :: Text)],
-                           docBlocks = [ParseDoc.Cont "Blah is the best filler word possible."]
-                         }
+                      ParseDoc.Doc
+                        { docFrontMatter =
+                            Y.object
+                              ["title" .= ("Blah --- my personal blog about Blah!" :: Text)]
+                        , docBlocks = [ParseDoc.Cont "Blah is the best filler word possible."]
+                        }
                    )
 
     it "Closing \"---\" must be at beginning of line" $ do
@@ -97,8 +95,8 @@ Blah is the best filler word possible.|]
       let input2Unix = "---\ntitle: My blog\n---\n"
       let input2Doc =
             ParseDoc.Doc
-              { docFrontMatter = Y.object ["title" .= ("My blog" :: Text)],
-                docBlocks = [ParseDoc.Cont ""]
+              { docFrontMatter = Y.object ["title" .= ("My blog" :: Text)]
+              , docBlocks = [ParseDoc.Cont ""]
               }
       runDocParse input2Win `shouldBe` Right input2Doc
       runDocParse input2Unix `shouldBe` Right input2Doc
@@ -109,7 +107,6 @@ Blah is the best filler word possible.|]
       -- If the front matter that follows is invalid, the parser must fail entirely.
       let input = "---\ntitle: This blog has a front matter that does not end.\n"
       runDocParse input `shouldSatisfy` isLeft
-
 
 -- ** Tests on parsing expressions
 
@@ -124,91 +121,107 @@ booleanExpressions = do
   describe "Boolean expressions" $ do
     it "'and' and 'or' are right-associative" $ do
       parseCondition "a and b or c"
-        `shouldBe`
-          parsedCondition
-            (ParseDoc.Expr
-              (ParseDoc.ExprAnd
-                (ParseDoc.ImmVar ["a"])
-                (ParseDoc.ExprOr (ParseDoc.ImmVar ["b"]) (ParseDoc.ImmVar ["c"]))
+        `shouldBe` parsedCondition
+          ( ParseDoc.Expr
+              ( ParseDoc.ExprAnd
+                  (ParseDoc.ImmVar ["a"])
+                  (ParseDoc.ExprOr (ParseDoc.ImmVar ["b"]) (ParseDoc.ImmVar ["c"]))
               )
               []
-            )
+          )
       parseCondition "a or b and c or d"
-        `shouldBe`
-          parsedCondition
-            (ParseDoc.Expr
-              (ParseDoc.ExprOr
-                (ParseDoc.ImmVar ["a"])
-                (ParseDoc.ExprAnd
-                  (ParseDoc.ImmVar ["b"])
-                  (ParseDoc.ExprOr
-                    (ParseDoc.ImmVar ["c"])
-                    (ParseDoc.ImmVar ["d"])
+        `shouldBe` parsedCondition
+          ( ParseDoc.Expr
+              ( ParseDoc.ExprOr
+                  (ParseDoc.ImmVar ["a"])
+                  ( ParseDoc.ExprAnd
+                      (ParseDoc.ImmVar ["b"])
+                      ( ParseDoc.ExprOr
+                          (ParseDoc.ImmVar ["c"])
+                          (ParseDoc.ImmVar ["d"])
+                      )
                   )
-                )
               )
               []
-            )
+          )
 
-    it "'and'" $ parseCondition "a and b"
-      `shouldBe`
-        parsedCondition
+    it "'and'" $
+      parseCondition "a and b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprAnd (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprAnd (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
 
-    it "'or'" $ parseCondition "a or b"
-      `shouldBe`
-        parsedCondition
+    it "'or'" $
+      parseCondition "a or b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprOr (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprOr (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
 
-    it "'=='" $ parseCondition "a == b"
-      `shouldBe`
-        parsedCondition
+    it "'=='" $
+      parseCondition "a == b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprEq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprEq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
 
-    it "'!='" $ parseCondition "a != b"
-      `shouldBe`
-        parsedCondition
+    it "'!='" $
+      parseCondition "a != b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprNeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprNeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
 
-    it "'>'" $ parseCondition "a > b"
-      `shouldBe`
-        parsedCondition
+    it "'>'" $
+      parseCondition "a > b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprGt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprGt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
 
-    it "'<'" $ parseCondition "a < b"
-      `shouldBe`
-        parsedCondition
+    it "'<'" $
+      parseCondition "a < b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprLt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprLt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
 
-    it "'>='" $ parseCondition "a >= b"
-      `shouldBe`
-        parsedCondition
+    it "'>='" $
+      parseCondition "a >= b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprGeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprGeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
 
-    it "'<='" $ parseCondition "a <= b"
-      `shouldBe`
-        parsedCondition
+    it "'<='" $
+      parseCondition "a <= b"
+        `shouldBe` parsedCondition
           ( ParseDoc.Expr
-            ( ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"])) [])
+              (ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
   where
     parseCondition con =
       runDocParse $ "{% if " <> con <> " %}Blah{% endif %}"
-    parsedCondition e = Right $ doc
-      [ParseDoc.Tag
-        ( ParseDoc.TagIf
-            e
-            [ParseDoc.Cont "Blah"]
-            []
-            Nothing
-        )
-      ]
+    parsedCondition e =
+      Right $
+        doc
+          [ ParseDoc.Tag
+              ( ParseDoc.TagIf
+                  e
+                  [ParseDoc.Cont "Blah"]
+                  []
+                  Nothing
+              )
+          ]
 
 filters :: Spec
 filters = do
@@ -312,10 +325,12 @@ filters = do
           `filterShouldBe` ParseDoc.FilterSplit (ParseDoc.StringyLit ",")
       it "'strip'" $ "strip" `filterShouldBe` ParseDoc.FilterStrip
       it "'strip_html'" $ "strip_html" `filterShouldBe` ParseDoc.FilterStripHtml
-      it "'strip_newlines'" $ "strip_newlines" `filterShouldBe` ParseDoc.FilterStripNewlines
+      it "'strip_newlines'" $
+        "strip_newlines" `filterShouldBe` ParseDoc.FilterStripNewlines
       it "'escape'" $ "escape" `filterShouldBe` ParseDoc.FilterEscape
       it "'escape_once'" $ "escape_once" `filterShouldBe` ParseDoc.FilterEscapeOnce
-      it "'newline_to_br'" $ "newline_to_br" `filterShouldBe` ParseDoc.FilterNewlineToBr
+      it "'newline_to_br'" $
+        "newline_to_br" `filterShouldBe` ParseDoc.FilterNewlineToBr
       it "'truncate'" $ do
         "truncate: 42"
           `filterShouldBe` ParseDoc.FilterTruncate (ParseDoc.NumberyNum 42) Nothing
@@ -345,14 +360,16 @@ filters = do
       :: ParseDoc.BaseExpr
       -> [ParseDoc.FilterExpr]
       -> Either String ParseDoc.Doc
-    parsedExpr imm f = Right
-      (doc
-        [ParseDoc.Tag
-          (ParseDoc.TagExpress (ParseDoc.Expr imm f))])
+    parsedExpr imm f =
+      Right
+        ( doc
+            [ ParseDoc.Tag
+                (ParseDoc.TagExpress (ParseDoc.Expr imm f))
+            ]
+        )
     filterShouldBe filterString fil =
       runDocParse ("{{ x | " <> filterString <> " }}")
         `shouldBe` parsedExpr (ParseDoc.ImmVar ["x"]) [fil]
-
 
 -- ** Tests on parsing tags
 
@@ -387,14 +404,15 @@ expressTags = do
       runDocParse " foo {{- blah -}} bar "
         `shouldBe` Right
           ( doc
-              [ ParseDoc.Cont " foo",
-                ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr (ParseDoc.ImmVar ["blah"]) [])),
-                ParseDoc.Cont "bar "
+              [ ParseDoc.Cont " foo"
+              , ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr (ParseDoc.ImmVar ["blah"]) []))
+              , ParseDoc.Cont "bar "
               ]
           )
   where
-    parsedImmExpr imm = Right
-          (doc [ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr imm []))])
+    parsedImmExpr imm =
+      Right
+        (doc [ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr imm []))])
 
 ifTags :: Spec
 ifTags = do
@@ -427,19 +445,20 @@ Baz
       runDocParse input
         `shouldBe` parsedIfTag
           (ParseDoc.ImmVar ["blah"])
-          [ ParseDoc.Cont "\n",
-            ParseDoc.Tag
+          [ ParseDoc.Cont "\n"
+          , ParseDoc.Tag
               ( ParseDoc.TagIf
                   (ParseDoc.immVar ["blah", "x"])
                   [ParseDoc.Cont "\nFoo\n"]
                   []
                   (Just [ParseDoc.Cont "\nBar\n"])
-              ),
-            ParseDoc.Cont "\n"
+              )
+          , ParseDoc.Cont "\n"
           ]
           []
           (Just [ParseDoc.Cont "\nBaz\n"])
-      let input2 = "{%if a%}{%if b%}{%if c%}Foo{%else%}Bar{%endif%}{%else%}Baz{%endif%}{%else%}Blah{%endif%}"
+      let input2 =
+            "{%if a%}{%if b%}{%if c%}Foo{%else%}Bar{%endif%}{%else%}Baz{%endif%}{%else%}Blah{%endif%}"
       runDocParse input2
         `shouldBe` parsedIfTag
           (ParseDoc.ImmVar ["a"])
@@ -492,21 +511,22 @@ Foo
                       [ParseDoc.Cont "\nBlah"]
                       []
                       (Just [ParseDoc.Cont "Not Blah\n"])
-                  ),
-                ParseDoc.Tag
+                  )
+              , ParseDoc.Tag
                   ( ParseDoc.TagIf
                       (ParseDoc.immVar ["y"])
                       [ParseDoc.Cont "\n Baz"]
                       []
                       Nothing
-                  ),
-                ParseDoc.Cont "Foo\n"
+                  )
+              , ParseDoc.Cont "Foo\n"
               ]
           )
 
-    it "'if' tags with 'elsif' and with 'else'" $ do
-      let input =
-            [r|
+    it "'if' tags with 'elsif' and with 'else'" $
+      do
+        let input =
+              [r|
 {%- if x -%}
 Foo
 {%- elsif y -%}
@@ -515,13 +535,13 @@ Bar
 Baz
 {%- endif -%}
 |]
-      runDocParse input
-      `shouldBe` parsedIfTag
-        (ParseDoc.ImmVar ["x"])
-        [ParseDoc.Cont "Foo"]
-        [ (ParseDoc.ImmVar ["y"], [ParseDoc.Cont "Bar"])
-        ]
-        (Just [ParseDoc.Cont "Baz"])
+        runDocParse input
+        `shouldBe` parsedIfTag
+          (ParseDoc.ImmVar ["x"])
+          [ParseDoc.Cont "Foo"]
+          [ (ParseDoc.ImmVar ["y"], [ParseDoc.Cont "Bar"])
+          ]
+          (Just [ParseDoc.Cont "Baz"])
 
     it "'if' tags with 'elsif' and without 'else'" $ do
       let input =
@@ -542,7 +562,8 @@ Four
           [ParseDoc.Cont "One"]
           [ (ParseDoc.ImmVar ["two"], [ParseDoc.Cont "Two"])
           , (ParseDoc.ImmVar ["three"], [ParseDoc.Cont "Three"])
-          , (ParseDoc.ImmVar ["four"], [ParseDoc.Cont "Four"]) ]
+          , (ParseDoc.ImmVar ["four"], [ParseDoc.Cont "Four"])
+          ]
           Nothing
   where
     parsedIfTag
@@ -554,4 +575,4 @@ Four
     parsedIfTag prd' conseq alts' final =
       let alts = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> alts'
           prd = ParseDoc.Expr prd' []
-      in Right (doc [ParseDoc.Tag (ParseDoc.TagIf prd conseq alts final)])
+       in Right (doc [ParseDoc.Tag (ParseDoc.TagIf prd conseq alts final)])

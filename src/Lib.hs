@@ -1,9 +1,9 @@
-module Lib
-    ( generate
-    ) where
+module Lib (
+  generate,
+) where
 
-import ProjectConfig (configFileName, initConfig)
 import qualified CanonPath
+import ProjectConfig (configFileName, initConfig)
 import Resources (listFilesRecurse)
 
 {-
@@ -48,8 +48,8 @@ data GenMarkupState
 -- | Generate the site in the directory `src` into `dest`.
 generate :: FilePath -> FilePath -> IO ()
 generate src dest = do
-    putStrLn $ "Generating "<> src <> " into " <> dest <> " ..."
-    config <- initConfig src configFileName
-    print config
-    files <- listFilesRecurse src >>= mapM CanonPath.fromPath
-    print files
+  putStrLn $ "Generating " <> src <> " into " <> dest <> " ..."
+  config <- initConfig src configFileName
+  print config
+  files <- listFilesRecurse src >>= mapM CanonPath.fromPath
+  print files
