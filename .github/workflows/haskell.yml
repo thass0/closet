@@ -9,25 +9,27 @@ on:
 permissions:
   contents: read
 
+# This config is vaguely based on https://github.com/futurice/myRetroGenerator/blob/master/.github/workflows/ci.yml
+
+# ubuntu-latest comes with GHC 9.8.1 and Stack 2.13.1 as of 16 Dec 2023.
+# https://github.com/commercialhaskell/stack/blob/master/.github/workflows/unit-tests.yml
+
 jobs:
   build:
 
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-haskell@v1
-      with:
-        ghc-version: '9.6.3'
-        cabal-version: '3.2'
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
-    - name: Cache
+    - name: Cache dependencies
       uses: actions/cache@v3
       env:
-        cache-name: cache-cabal
+        cache-name: cache-stack
       with:
-        path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        path: ~/.stack
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('stack.yaml.lock') }}-${{ hashFiles('closet.cabal') }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
           ${{ runner.os }}-build-
@@ -35,10 +37,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        cabal update
-        cabal install record-dot-preprocessor
-        cabal build --only-dependencies --enable-tests --enable-benchmarks
+        stack update
+        stack build --only-dependencies
     - name: Build
-      run: cabal build --enable-tests --enable-benchmarks all
+      run: stack build
     - name: Run tests
-      run: cabal test all
+      run: stack test
