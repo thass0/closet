@@ -145,6 +145,43 @@ booleanExpressions = do
               []
           )
 
+    it "'==' and '>' have higher precedence than 'and'" $ do
+      parseCondition "a == b and c > d"
+        `shouldBe` parsedCondition
+          ( ParseDoc.Expr
+              ( ParseDoc.ExprAnd
+                  ( ParseDoc.ExprEq
+                      (ParseDoc.ImmVar ["a"])
+                      (ParseDoc.ImmVar ["b"])
+                  )
+                  ( ParseDoc.ExprGt
+                      (ParseDoc.ImmVar ["c"])
+                      (ParseDoc.ImmVar ["d"])
+                  )
+              )
+              []
+          )
+
+    it "'<=' and '!=' have higher precedence than 'or'" $ do
+      parseCondition "a <= b or c != d"
+        `shouldBe` parsedCondition
+          ( ParseDoc.Expr
+              ( ParseDoc.ExprOr
+                  ( ParseDoc.ExprLeq
+                      (ParseDoc.ImmVar ["a"])
+                      (ParseDoc.ImmVar ["b"])
+                  )
+                  ( ParseDoc.ExprNeq
+                      (ParseDoc.ImmVar ["c"])
+                      (ParseDoc.ImmVar ["d"])
+                  )
+              )
+              []
+          )
+
+    it "Cannot chain operators without 'and' or 'or'" $ do
+      parseCondition "a == b == c" `shouldSatisfy` isLeft
+
     it "'and'" $
       parseCondition "a and b"
         `shouldBe` parsedCondition

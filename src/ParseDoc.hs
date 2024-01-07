@@ -248,14 +248,39 @@ pImmExpr =
 
 type BaseOp = BaseExpr -> BaseExpr -> BaseExpr
 
+-- Boolean operators ('==', '!=', ...) have higher precedence
+-- than the 'and' and 'or' operators. This is why they are
+-- parsed separately from 'pBaseExpr'. By adding this layer of
+-- parsers, the precedence is reflected  in the AST correctly.
+pBooleanOp :: Parser BaseExpr
+pBooleanOp = do
+  lhs <- pLexeme pImmExpr
+  rhs <- optional $ (,) <$> pOperator <*> pLexeme pImmExpr
+  case rhs of
+    Just (op, rhs') -> pure $ op lhs rhs'
+    Nothing -> pure lhs
+  where
+    -- NOTE: Try parsing '>=' and '<=' before '>' and '<' to
+    -- avoid accepting '>' or '<' before seeing the '=' suffix.
+    pOperator :: Parser BaseOp
+    pOperator =
+      choice
+        [ pSymbol "==" $> ExprEq
+        , pSymbol "!=" $> ExprNeq
+        , pSymbol ">=" $> ExprGeq
+        , pSymbol "<=" $> ExprLeq
+        , pSymbol ">" $> ExprGt
+        , pSymbol "<" $> ExprLt
+        ]
+
 pBaseExpr :: Parser BaseExpr
 pBaseExpr = do
-  lhs <- pLexeme pImmExpr
-  rhss <- many $ (,) <$> pOperand <*> pLexeme pImmExpr
+  lhs <- pLexeme pBooleanOp
+  rhss <- many $ (,) <$> pOperator <*> pLexeme pBooleanOp
   pure $ applyTransformed lhs (foldl (transformParsed lhs) [] rhss)
   where
-    pOperand :: Parser BaseOp
-    pOperand =
+    pOperator :: Parser BaseOp
+    pOperator =
       choice
         [ pSymbol "and" $> ExprAnd
         , pSymbol "or" $> ExprOr
