@@ -30,7 +30,6 @@ dependencies:
 - yaml >= 0.11 && < 0.12
 - bytestring
 - aeson
-- record-hasfield  # For record-dot-preprocessor
 - directory
 - filepath
 - unordered-containers
@@ -47,7 +46,6 @@ ghc-options:
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
-- -F -pgmF=record-dot-preprocessor
 
 library:
   source-dirs: src

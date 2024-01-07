@@ -38,7 +38,7 @@ library
       StrictData
       OverloadedStrings
       QuasiQuotes
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -F -pgmF=record-dot-preprocessor
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       aeson
     , base >=4.7 && <5
@@ -47,7 +47,6 @@ library
     , filepath
     , megaparsec
     , raw-strings-qq
-    , record-hasfield
     , text
     , unordered-containers
     , yaml ==0.11.*
@@ -63,7 +62,7 @@ executable closet-exe
       StrictData
       OverloadedStrings
       QuasiQuotes
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -F -pgmF=record-dot-preprocessor -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
     , base >=4.7 && <5
@@ -73,7 +72,6 @@ executable closet-exe
     , filepath
     , megaparsec
     , raw-strings-qq
-    , record-hasfield
     , text
     , unordered-containers
     , yaml ==0.11.*
@@ -93,7 +91,7 @@ test-suite closet-test
       StrictData
       OverloadedStrings
       QuasiQuotes
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -F -pgmF=record-dot-preprocessor -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
     , base >=4.7 && <5
@@ -105,7 +103,6 @@ test-suite closet-test
     , hspec-discover
     , megaparsec
     , raw-strings-qq
-    , record-hasfield
     , text
     , unordered-containers
     , yaml ==0.11.*

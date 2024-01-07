@@ -21,11 +21,7 @@ runDocParse :: Text -> Either String ParseDoc.Doc
 runDocParse = runTestParse (ParseDoc.pDocument <* eof)
 
 doc :: [ParseDoc.Block] -> ParseDoc.Doc
-doc p =
-  ParseDoc.Doc
-    { docFrontMatter = Y.object []
-    , docBlocks = p
-    }
+doc p = ParseDoc.Doc (Y.object []) p
 
 -- * Tests
 
@@ -61,13 +57,13 @@ This is the content of this page!|]
       runDocParse input
         `shouldBe` ( Right $
                       ParseDoc.Doc
-                        { docFrontMatter =
+                        { ParseDoc.docFrontMatter =
                             Y.object
                               [ "name" .= ("This is my name" :: Text)
                               , "age" .= (41 :: Int)
                               , "children" .= Y.array ["Child1", "Child2", "Child3"]
                               ]
-                        , docBlocks = [ParseDoc.Cont "This is the content of this page!"]
+                        , ParseDoc.docBlocks = [ParseDoc.Cont "This is the content of this page!"]
                         }
                    )
 
@@ -81,10 +77,10 @@ Blah is the best filler word possible.|]
       runDocParse input
         `shouldBe` ( Right $
                       ParseDoc.Doc
-                        { docFrontMatter =
+                        { ParseDoc.docFrontMatter =
                             Y.object
                               ["title" .= ("Blah --- my personal blog about Blah!" :: Text)]
-                        , docBlocks = [ParseDoc.Cont "Blah is the best filler word possible."]
+                        , ParseDoc.docBlocks = [ParseDoc.Cont "Blah is the best filler word possible."]
                         }
                    )
 
@@ -95,8 +91,8 @@ Blah is the best filler word possible.|]
       let input2Unix = "---\ntitle: My blog\n---\n"
       let input2Doc =
             ParseDoc.Doc
-              { docFrontMatter = Y.object ["title" .= ("My blog" :: Text)]
-              , docBlocks = [ParseDoc.Cont ""]
+              { ParseDoc.docFrontMatter = Y.object ["title" .= ("My blog" :: Text)]
+              , ParseDoc.docBlocks = [ParseDoc.Cont ""]
               }
       runDocParse input2Win `shouldBe` Right input2Doc
       runDocParse input2Unix `shouldBe` Right input2Doc
