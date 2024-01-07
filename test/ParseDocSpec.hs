@@ -18,7 +18,7 @@ runTestParse parser input =
     Left err -> Left (errorBundlePretty err)
 
 runDocParse :: Text -> Either String ParseDoc.Doc
-runDocParse = runTestParse ParseDoc.pDocument
+runDocParse = runTestParse (ParseDoc.pDocument <* eof)
 
 doc :: [ParseDoc.Block] -> ParseDoc.Doc
 doc p =
@@ -226,135 +226,153 @@ booleanExpressions = do
 filters :: Spec
 filters = do
   describe "Filtered expressions" $ do
+    -- TODO: Move the tests for individual filters somewhere
+    -- else, once another part of the front-end validates
+    -- that the filters have implementations.
     describe "Numeric filters" $ do
       it "'plus'" $
         "plus: 4891"
-          `filterShouldBe` ParseDoc.FilterPlus (ParseDoc.NumberyNum 4891)
+          `filterShouldBe` ParseDoc.FilterExpr "plus" [ParseDoc.ImmNum 4891]
       it "'minus'" $
         "minus: 51"
-          `filterShouldBe` ParseDoc.FilterMinus (ParseDoc.NumberyNum 51)
+          `filterShouldBe` ParseDoc.FilterExpr "minus" [ParseDoc.ImmNum 51]
       it "'times'" $
         "times: -642"
-          `filterShouldBe` ParseDoc.FilterTimes (ParseDoc.NumberyNum (-642))
+          `filterShouldBe` ParseDoc.FilterExpr "times" [ParseDoc.ImmNum (-642)]
       it "'divided_by'" $
         "divided_by: y"
-          `filterShouldBe` ParseDoc.FilterDividedBy (ParseDoc.NumberyVar ["y"])
+          `filterShouldBe` ParseDoc.FilterExpr "divided_by" [ParseDoc.ImmVar ["y"]]
       it "'modulo'" $
         "modulo: site.x"
-          `filterShouldBe` ParseDoc.FilterModulo (ParseDoc.NumberyVar ["site", "x"])
+          `filterShouldBe` ParseDoc.FilterExpr "modulo" [ParseDoc.ImmVar ["site", "x"]]
       it "'at_least'" $ do
         "at_least: 19"
-          `filterShouldBe` ParseDoc.FilterAtLeast (ParseDoc.NumberyNum 19)
-        runDocParse "{{ 19 | at_least: \"Blah\" }}" `shouldSatisfy` isLeft
+          `filterShouldBe` ParseDoc.FilterExpr "at_least" [ParseDoc.ImmNum 19]
       it "'at_most'" $ do
         "at_most: 19"
-          `filterShouldBe` ParseDoc.FilterAtMost (ParseDoc.NumberyNum 19)
-        runDocParse "{{ 19 | at_most: \"Blah\" }}" `shouldSatisfy` isLeft
+          `filterShouldBe` ParseDoc.FilterExpr "at_most" [ParseDoc.ImmNum 19]
       it "'abs'" $ do
-        "abs" `filterShouldBe` ParseDoc.FilterAbs
+        "abs" `filterShouldBe` ParseDoc.FilterExpr "abs" []
         runDocParse "{{ -32 | abs | abs|abs|abs  | abs}}"
-          `shouldBe` parsedExpr (ParseDoc.ImmNum (-32)) (replicate 5 ParseDoc.FilterAbs)
-      it "'ceil'" $ "ceil" `filterShouldBe` ParseDoc.FilterCeil
-      it "'floor'" $ "floor" `filterShouldBe` ParseDoc.FilterFloor
-      it "'round'" $ "round" `filterShouldBe` ParseDoc.FilterRound
+          `shouldBe` parsedExpr (ParseDoc.ImmNum (-32)) (replicate 5 (ParseDoc.FilterExpr "abs" []))
+      it "'ceil'" $ "ceil" `filterShouldBe` ParseDoc.FilterExpr "ceil" []
+      it "'floor'" $ "floor" `filterShouldBe` ParseDoc.FilterExpr "floor" []
+      it "'round'" $ "round" `filterShouldBe` ParseDoc.FilterExpr "round" []
 
     describe "Array and object filters" $ do
       it "'append'" $ do
         "append: \"World!\""
-          `filterShouldBe` ParseDoc.FilterAppend (ParseDoc.StringyLit "World!")
-        runDocParse "{{ \"Blah\" | append: 91 }}" `shouldSatisfy` isLeft
-      it "'concat'" $ "concat: wowow" `filterShouldBe` ParseDoc.FilterConcat ["wowow"]
-      it "'first'" $ "first" `filterShouldBe` ParseDoc.FilterFirst
-      it "'last'" $ "last" `filterShouldBe` ParseDoc.FilterLast
+          `filterShouldBe` ParseDoc.FilterExpr "append" [ParseDoc.ImmStrLit "World!"]
+      it "'concat'" $
+        "concat: wowow"
+          `filterShouldBe` ParseDoc.FilterExpr "concat" [ParseDoc.ImmVar ["wowow"]]
+      it "'first'" $ "first" `filterShouldBe` ParseDoc.FilterExpr "first" []
+      it "'last'" $ "last" `filterShouldBe` ParseDoc.FilterExpr "last" []
       it "'join'" $
         "join: blah"
-          `filterShouldBe` ParseDoc.FilterJoin (ParseDoc.StringyVar ["blah"])
-      it "'reverse'" $ "reverse" `filterShouldBe` ParseDoc.FilterReverse
-      it "'sort'" $ "sort" `filterShouldBe` ParseDoc.FilterSort
-      it "'sort_natural'" $ "sort_natural" `filterShouldBe` ParseDoc.FilterSortNatural
+          `filterShouldBe` ParseDoc.FilterExpr "join" [ParseDoc.ImmVar ["blah"]]
+      it "'reverse'" $ "reverse" `filterShouldBe` ParseDoc.FilterExpr "reverse" []
+      it "'sort'" $ "sort" `filterShouldBe` ParseDoc.FilterExpr "sort" []
+      it "'sort_natural'" $
+        "sort_natural" `filterShouldBe` ParseDoc.FilterExpr "sort_natural" []
       it "'map'" $
         "map: \"blah\""
-          `filterShouldBe` ParseDoc.FilterMap (ParseDoc.StringyLit "blah")
-      it "'compact'" $ "compact" `filterShouldBe` ParseDoc.FilterCompact
+          `filterShouldBe` ParseDoc.FilterExpr "map" [ParseDoc.ImmStrLit "blah"]
+      it "'compact'" $ "compact" `filterShouldBe` ParseDoc.FilterExpr "compact" []
       it "'sum'" $ do
-        "sum" `filterShouldBe` ParseDoc.FilterSum Nothing
+        "sum" `filterShouldBe` ParseDoc.FilterExpr "sum" []
         "sum: \"category\""
-          `filterShouldBe` ParseDoc.FilterSum (Just (ParseDoc.StringyLit "category"))
-      it "'uniq'" $ "uniq" `filterShouldBe` ParseDoc.FilterUniq
+          `filterShouldBe` ParseDoc.FilterExpr "sum" [ParseDoc.ImmStrLit "category"]
+      it "'uniq'" $ "uniq" `filterShouldBe` ParseDoc.FilterExpr "uniq" []
       it "'where'" $ do
         "where: \"x\""
-          `filterShouldBe` ParseDoc.FilterWhere (ParseDoc.StringyLit "x") Nothing
+          `filterShouldBe` ParseDoc.FilterExpr "where" [ParseDoc.ImmStrLit "x"]
         "where: blah, foo"
-          `filterShouldBe` ParseDoc.FilterWhere
-            (ParseDoc.StringyVar ["blah"])
-            (Just (ParseDoc.StringyVar ["foo"]))
+          `filterShouldBe` ParseDoc.FilterExpr
+            "where"
+            [ ParseDoc.ImmVar ["blah"]
+            , ParseDoc.ImmVar ["foo"]
+            ]
 
     describe "String filters" $ do
-      it "'capitalize'" $ "capitalize" `filterShouldBe` ParseDoc.FilterCapitalize
-      it "'upcase'" $ "upcase" `filterShouldBe` ParseDoc.FilterUpcase
-      it "'downcase'" $ "downcase" `filterShouldBe` ParseDoc.FilterDowncase
-      it "'lstrip'" $ "lstrip" `filterShouldBe` ParseDoc.FilterLStrip
-      it "'rstrip'" $ "rstrip" `filterShouldBe` ParseDoc.FilterRStrip
+      it "'capitalize'" $
+        "capitalize" `filterShouldBe` ParseDoc.FilterExpr "capitalize" []
+      it "'upcase'" $ "upcase" `filterShouldBe` ParseDoc.FilterExpr "upcase" []
+      it "'downcase'" $ "downcase" `filterShouldBe` ParseDoc.FilterExpr "downcase" []
+      it "'lstrip'" $ "lstrip" `filterShouldBe` ParseDoc.FilterExpr "lstrip" []
+      it "'rstrip'" $ "rstrip" `filterShouldBe` ParseDoc.FilterExpr "rstrip" []
       it "'prepend'" $
         "prepend: \"blah\""
-          `filterShouldBe` ParseDoc.FilterPrepend (ParseDoc.StringyLit "blah")
+          `filterShouldBe` ParseDoc.FilterExpr "prepend" [ParseDoc.ImmStrLit "blah"]
       it "'replace'" $
         "replace: the.string, \"blah\""
-          `filterShouldBe` ParseDoc.FilterReplace
-            (ParseDoc.StringyVar ["the", "string"])
-            (ParseDoc.StringyLit "blah")
+          `filterShouldBe` ParseDoc.FilterExpr
+            "replace"
+            [ ParseDoc.ImmVar ["the", "string"]
+            , ParseDoc.ImmStrLit "blah"
+            ]
       it "'replace_first'" $
         "replace_first: \"blah\" , page.title "
-          `filterShouldBe` ParseDoc.FilterReplaceFirst
-            (ParseDoc.StringyLit "blah")
-            (ParseDoc.StringyVar ["page", "title"])
+          `filterShouldBe` ParseDoc.FilterExpr
+            "replace_first"
+            [ ParseDoc.ImmStrLit "blah"
+            , ParseDoc.ImmVar ["page", "title"]
+            ]
       it "'remove'" $
         "remove: the.string"
-          `filterShouldBe` ParseDoc.FilterRemove (ParseDoc.StringyVar ["the", "string"])
+          `filterShouldBe` ParseDoc.FilterExpr "remove" [ParseDoc.ImmVar ["the", "string"]]
       it "'remove_first'" $
         "remove_first: \"blah\""
-          `filterShouldBe` ParseDoc.FilterRemoveFirst (ParseDoc.StringyLit "blah")
-      it "'size'" $ "size" `filterShouldBe` ParseDoc.FilterSize
+          `filterShouldBe` ParseDoc.FilterExpr "remove_first" [ParseDoc.ImmStrLit "blah"]
+      it "'size'" $ "size" `filterShouldBe` ParseDoc.FilterExpr "size" []
       it "'slice'" $ do
         "slice: 4"
-          `filterShouldBe` ParseDoc.FilterSlice (ParseDoc.NumberyNum 4) Nothing
+          `filterShouldBe` ParseDoc.FilterExpr "slice" [ParseDoc.ImmNum 4]
         "slice: 5, 9"
-          `filterShouldBe` ParseDoc.FilterSlice (ParseDoc.NumberyNum 5) (Just (ParseDoc.NumberyNum 9))
+          `filterShouldBe` ParseDoc.FilterExpr "slice" [ParseDoc.ImmNum 5, ParseDoc.ImmNum 9]
       it "'split'" $
         "split: \",\""
-          `filterShouldBe` ParseDoc.FilterSplit (ParseDoc.StringyLit ",")
-      it "'strip'" $ "strip" `filterShouldBe` ParseDoc.FilterStrip
-      it "'strip_html'" $ "strip_html" `filterShouldBe` ParseDoc.FilterStripHtml
+          `filterShouldBe` ParseDoc.FilterExpr "split" [ParseDoc.ImmStrLit ","]
+      it "'strip'" $ "strip" `filterShouldBe` ParseDoc.FilterExpr "strip" []
+      it "'strip_html'" $
+        "strip_html" `filterShouldBe` ParseDoc.FilterExpr "strip_html" []
       it "'strip_newlines'" $
-        "strip_newlines" `filterShouldBe` ParseDoc.FilterStripNewlines
-      it "'escape'" $ "escape" `filterShouldBe` ParseDoc.FilterEscape
-      it "'escape_once'" $ "escape_once" `filterShouldBe` ParseDoc.FilterEscapeOnce
+        "strip_newlines" `filterShouldBe` ParseDoc.FilterExpr "strip_newlines" []
+      it "'escape'" $ "escape" `filterShouldBe` ParseDoc.FilterExpr "escape" []
+      it "'escape_once'" $
+        "escape_once" `filterShouldBe` ParseDoc.FilterExpr "escape_once" []
       it "'newline_to_br'" $
-        "newline_to_br" `filterShouldBe` ParseDoc.FilterNewlineToBr
+        "newline_to_br" `filterShouldBe` ParseDoc.FilterExpr "newline_to_br" []
       it "'truncate'" $ do
         "truncate: 42"
-          `filterShouldBe` ParseDoc.FilterTruncate (ParseDoc.NumberyNum 42) Nothing
+          `filterShouldBe` ParseDoc.FilterExpr "truncate" [ParseDoc.ImmNum 42]
         "truncate: 64 ,\"blah\""
-          `filterShouldBe` ParseDoc.FilterTruncate
-            (ParseDoc.NumberyNum 64)
-            (Just (ParseDoc.StringyLit "blah"))
+          `filterShouldBe` ParseDoc.FilterExpr
+            "truncate"
+            [ ParseDoc.ImmNum 64
+            , ParseDoc.ImmStrLit "blah"
+            ]
       it "'truncatewords'" $ do
         "truncatewords: 259"
-          `filterShouldBe` ParseDoc.FilterTruncateWords (ParseDoc.NumberyNum 259) Nothing
+          `filterShouldBe` ParseDoc.FilterExpr "truncatewords" [ParseDoc.ImmNum 259]
         "truncatewords:49,my.ellipse"
-          `filterShouldBe` ParseDoc.FilterTruncateWords
-            (ParseDoc.NumberyNum 49)
-            (Just (ParseDoc.StringyVar ["my", "ellipse"]))
+          `filterShouldBe` ParseDoc.FilterExpr
+            "truncatewords"
+            [ ParseDoc.ImmNum 49
+            , ParseDoc.ImmVar ["my", "ellipse"]
+            ]
       it "'date'" $
         "date: \"%a, %b %d, %y\""
-          `filterShouldBe` ParseDoc.FilterDate (ParseDoc.StringyLit "%a, %b %d, %y")
-      it "'url_decode'" $ "url_decode" `filterShouldBe` ParseDoc.FilterUrlDecode
-      it "'url_encode'" $ "url_encode" `filterShouldBe` ParseDoc.FilterUrlEncode
+          `filterShouldBe` ParseDoc.FilterExpr "date" [ParseDoc.ImmStrLit "%a, %b %d, %y"]
+      it "'url_decode'" $
+        "url_decode" `filterShouldBe` ParseDoc.FilterExpr "url_decode" []
+      it "'url_encode'" $
+        "url_encode" `filterShouldBe` ParseDoc.FilterExpr "url_encode" []
 
     describe "Miscellaneous filters" $ do
       it "'default'" $
         "default: site.title"
-          `filterShouldBe` ParseDoc.FilterDefault (ParseDoc.ImmVar ["site", "title"])
+          `filterShouldBe` ParseDoc.FilterExpr "default" [ParseDoc.ImmVar ["site", "title"]]
   where
     parsedExpr
       :: ParseDoc.BaseExpr
@@ -448,7 +466,7 @@ Baz
           [ ParseDoc.Cont "\n"
           , ParseDoc.Tag
               ( ParseDoc.TagIf
-                  (ParseDoc.immVar ["blah", "x"])
+                  (immVar ["blah", "x"])
                   [ParseDoc.Cont "\nFoo\n"]
                   []
                   (Just [ParseDoc.Cont "\nBar\n"])
@@ -464,10 +482,10 @@ Baz
           (ParseDoc.ImmVar ["a"])
           [ ParseDoc.Tag
               ( ParseDoc.TagIf
-                  (ParseDoc.immVar ["b"])
+                  (immVar ["b"])
                   [ ParseDoc.Tag
                       ( ParseDoc.TagIf
-                          (ParseDoc.immVar ["c"])
+                          (immVar ["c"])
                           [ParseDoc.Cont "Foo"]
                           []
                           (Just [ParseDoc.Cont "Bar"])
@@ -507,14 +525,14 @@ Foo
           ( doc
               [ ParseDoc.Tag
                   ( ParseDoc.TagIf
-                      (ParseDoc.immVar ["x"])
+                      (immVar ["x"])
                       [ParseDoc.Cont "\nBlah"]
                       []
                       (Just [ParseDoc.Cont "Not Blah\n"])
                   )
               , ParseDoc.Tag
                   ( ParseDoc.TagIf
-                      (ParseDoc.immVar ["y"])
+                      (immVar ["y"])
                       [ParseDoc.Cont "\n Baz"]
                       []
                       Nothing
@@ -576,3 +594,5 @@ Four
       let alts = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> alts'
           prd = ParseDoc.Expr prd' []
        in Right (doc [ParseDoc.Tag (ParseDoc.TagIf prd conseq alts final)])
+    immVar :: ParseDoc.Var -> ParseDoc.Expr
+    immVar v = ParseDoc.Expr (ParseDoc.ImmVar v) []

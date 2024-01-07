@@ -4,10 +4,7 @@ module ParseDoc (
   Block (..),
   Tag (..),
   Expr (..),
-  immVar,
   BaseExpr (..),
-  Stringy (..),
-  Numbery (..),
   Var,
   StrLit,
   Number,
@@ -59,8 +56,8 @@ data Tag
 data Expr = Expr BaseExpr [FilterExpr]
   deriving (Show, Eq)
 
-immVar :: Var -> Expr
-immVar v = Expr (ImmVar v) []
+data FilterExpr = FilterExpr Ident [BaseExpr]
+  deriving (Show, Eq)
 
 data BaseExpr
   = ImmVar Var
@@ -76,12 +73,6 @@ data BaseExpr
   | ExprLeq BaseExpr BaseExpr -- <=
   deriving (Show, Eq)
 
-data Stringy = StringyVar Var | StringyLit StrLit
-  deriving (Show, Eq)
-
-data Numbery = NumberyVar Var | NumberyNum Number
-  deriving (Show, Eq)
-
 type StrLit = Text
 
 type Number =
@@ -89,62 +80,6 @@ type Number =
   -- ^ TODO: There are floats and integers in liquid.
 
 type Var = [Ident]
-
-data FilterExpr
-  = -- \* Numeric filters
-    FilterPlus Numbery
-  | FilterMinus Numbery
-  | FilterTimes Numbery
-  | FilterDividedBy Numbery
-  | FilterModulo Numbery
-  | FilterAtLeast Numbery
-  | FilterAtMost Numbery
-  | FilterAbs
-  | FilterCeil
-  | FilterFloor
-  | FilterRound
-  | -- \* Array and object filters
-    FilterAppend Stringy
-  | FilterConcat Var
-  | FilterFirst
-  | FilterLast
-  | FilterJoin Stringy
-  | FilterReverse
-  | FilterSortNatural
-  | FilterSort
-  | FilterMap Stringy
-  | FilterCompact
-  | FilterSum (Maybe Stringy)
-  | FilterUniq
-  | FilterWhere Stringy (Maybe Stringy)
-  | -- \* String filters
-    FilterCapitalize
-  | FilterUpcase
-  | FilterDowncase
-  | FilterLStrip
-  | FilterRStrip
-  | FilterPrepend Stringy
-  | FilterReplace Stringy Stringy
-  | FilterReplaceFirst Stringy Stringy
-  | FilterRemove Stringy
-  | FilterRemoveFirst Stringy
-  | FilterSize
-  | FilterSlice Numbery (Maybe Numbery)
-  | FilterSplit Stringy
-  | FilterStrip
-  | FilterStripHtml
-  | FilterStripNewlines
-  | FilterEscape
-  | FilterEscapeOnce
-  | FilterNewlineToBr
-  | FilterTruncate Numbery (Maybe Stringy)
-  | FilterTruncateWords Numbery (Maybe Stringy)
-  | FilterUrlDecode
-  | FilterUrlEncode
-  | FilterDate Stringy
-  | -- \* Miscellaneous filters
-    FilterDefault BaseExpr
-  deriving (Show, Eq)
 
 type Ident = Text
 
@@ -357,109 +292,17 @@ pBaseExpr = do
     applyOps ((op, lhs), initRhs) Nothing = Just (op lhs initRhs)
     applyOps ((op, lhs), _) (Just rhs) = Just (op lhs rhs)
 
-pStringy :: Parser Stringy
-pStringy =
-  choice $
-    try
-      <$> [ pVar <&> StringyVar
-          , pStrLit <&> StringyLit
-          ]
-
-pNumbery :: Parser Numbery
-pNumbery =
-  choice $
-    try
-      <$> [ pVar <&> NumberyVar
-          , pNum <&> NumberyNum
-          ]
-
 pFilterExpr :: Parser FilterExpr
-pFilterExpr =
-  choice $
-    try
-      <$> [
-            -- \* Numeric filters
-            withColon "plus" >> pNumbery <&> FilterPlus
-          , withColon "minus" >> pNumbery <&> FilterMinus
-          , withColon "times" >> pNumbery <&> FilterTimes
-          , withColon "divided_by" >> pNumbery <&> FilterDividedBy
-          , withColon "modulo" >> pNumbery <&> FilterModulo
-          , withColon "at_least" >> pNumbery <&> FilterAtLeast
-          , withColon "at_most" >> pNumbery <&> FilterAtMost
-          , string "abs" $> FilterAbs
-          , string "ceil" $> FilterCeil
-          , string "floor" $> FilterFloor
-          , string "round" $> FilterRound
-          , -- \* Array and object filters
-            withColon "append" >> pStringy <&> FilterAppend
-          , withColon "concat" >> pVar <&> FilterConcat
-          , string "first" $> FilterFirst
-          , string "last" $> FilterLast
-          , withColon "join" >> pStringy <&> FilterJoin
-          , string "reverse" $> FilterReverse
-          , string "sort_natural" $> FilterSortNatural
-          , string "sort" $> FilterSort
-          , withColon "map" >> pStringy <&> FilterMap
-          , string "compact" $> FilterCompact
-          , (withColon "sum" >> pStringy) <&> FilterSum . Just
-          , string "sum" $> FilterSum Nothing
-          , string "uniq" $> FilterUniq
-          , withColon "where" >> pStringWithMaybeString <&> uncurry FilterWhere
-          , -- \* String filters
-            string "capitalize" $> FilterCapitalize
-          , string "upcase" $> FilterUpcase
-          , string "downcase" $> FilterDowncase
-          , string "lstrip" $> FilterLStrip
-          , string "rstrip" $> FilterRStrip
-          , withColon "prepend" >> pStringy <&> FilterPrepend
-          , withColon "replace_first" >> pTwoStrings <&> uncurry FilterReplaceFirst
-          , withColon "replace" >> pTwoStrings <&> uncurry FilterReplace
-          , withColon "remove_first" >> pStringy <&> FilterRemoveFirst
-          , withColon "remove" >> pStringy <&> FilterRemove
-          , string "size" $> FilterSize
-          , withColon "slice" >> pNumberWithMaybeNumber <&> uncurry FilterSlice
-          , withColon "split" >> pStringy <&> FilterSplit
-          , string "strip_newlines" $> FilterStripNewlines
-          , string "strip_html" $> FilterStripHtml
-          , string "strip" $> FilterStrip
-          , string "escape_once" $> FilterEscapeOnce
-          , string "escape" $> FilterEscape
-          , string "newline_to_br" $> FilterNewlineToBr
-          , withColon "truncatewords"
-              >> pNumberWithMaybeString
-              <&> uncurry FilterTruncateWords
-          , withColon "truncate" >> pNumberWithMaybeString <&> uncurry FilterTruncate
-          , withColon "date" >> pStringy <&> FilterDate
-          , string "url_decode" $> FilterUrlDecode
-          , string "url_encode" $> FilterUrlEncode
-          , -- \* Miscellaneous filters
-            withColon "default" >> pBaseExpr <&> FilterDefault
-          ]
-  where
-    pTwoStrings = do
-      first <- pLexeme pStringy
-      void $ pLexeme (char ',')
-      second <- pLexeme pStringy
-      pure (first, second)
-    pNumberWithMaybeNumber = do
-      first <- pLexeme pNumbery
-      second <- optional $ do
-        void $ pLexeme (char ',')
-        pLexeme pNumbery
-      pure (first, second)
-    pNumberWithMaybeString = do
-      n <- pLexeme pNumbery
-      str <- optional $ do
-        void $ pLexeme (char ',')
-        pLexeme pStringy
-      pure (n, str)
-    pStringWithMaybeString = do
-      first <- pLexeme pStringy
-      second <- optional $ do
-        void $ pLexeme (char ',')
-        pLexeme pStringy
-      pure (first, second)
-    withColon s = string s >> pLexeme (char ':')
+pFilterExpr = do
+  ident <- pLexeme pIdent
+  args <- optional . try $ do
+    -- Optionally parse filter argument. Once a colon
+    -- was seen, at least one argument must follow.
+    void $ pSymbol' ":"
+    sepBy1 pBaseExpr (pSymbol' ",")
+  case args of
+    Just args' -> pure $ FilterExpr ident args'
+    Nothing -> pure $ FilterExpr ident []
 
 pExpr :: Parser Expr
 pExpr = do
