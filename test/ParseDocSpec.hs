@@ -175,8 +175,26 @@ booleanExpressions = do
               []
           )
 
+    it "'contains' and '<' have higher precedence than 'and'" $ do
+      parseCondition "a contains b and 6 < 4"
+        `shouldBe` parsedCondition
+          ( ParseDoc.Expr
+              ( ParseDoc.ExprAnd
+                  ( ParseDoc.ExprContains
+                      (ParseDoc.ImmVar ["a"])
+                      (ParseDoc.ImmVar ["b"])
+                  )
+                  ( ParseDoc.ExprLt
+                      (ParseDoc.ImmNum 6)
+                      (ParseDoc.ImmNum 4)
+                  )
+              )
+              []
+          )
+
     it "Cannot chain operators without 'and' or 'or'" $ do
       parseCondition "a == b == c" `shouldSatisfy` isLeft
+      parseCondition "a contains b >= c" `shouldSatisfy` isLeft
 
     it "'and'" $
       parseCondition "a and b"
@@ -239,6 +257,17 @@ booleanExpressions = do
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
               (ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              []
+          )
+
+    it "'contains'" $
+      parseCondition "a contains b"
+        `shouldBe` parsedCondition
+          ( ParseDoc.Expr
+              ( ParseDoc.ExprContains
+                  (ParseDoc.ImmVar ["a"])
+                  (ParseDoc.ImmVar ["b"])
+              )
               []
           )
   where

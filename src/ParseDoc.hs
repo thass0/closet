@@ -71,6 +71,7 @@ data BaseExpr
   | ExprLt BaseExpr BaseExpr -- <
   | ExprGeq BaseExpr BaseExpr -- >=
   | ExprLeq BaseExpr BaseExpr -- <=
+  | ExprContains BaseExpr BaseExpr  -- contains
   deriving (Show, Eq)
 
 type StrLit = Text
@@ -271,6 +272,7 @@ pBooleanOp = do
         , pSymbol "<=" $> ExprLeq
         , pSymbol ">" $> ExprGt
         , pSymbol "<" $> ExprLt
+        , pSymbol "contains" $> ExprContains
         ]
 
 pBaseExpr :: Parser BaseExpr
