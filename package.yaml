@@ -1,10 +1,10 @@
 name:                closet
 version:             0.1.0.0
-github:              "d4ckard/closet"
+github:              "thass0/closet"
 license:             MIT
 author:              "Thassilo Schulze"
 maintainer:          "thassilo.schulze@proton.me"
-copyright:           "2023 Thassilo Schulze"
+copyright:           "2023-2024 Thassilo Schulze"
 
 extra-source-files:
 - README.md
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/d4ckard/closet#readme>
+description:         Please see the README on GitHub at <https://github.com/thass0/closet#readme>
 
 default-extensions:
   - StrictData
