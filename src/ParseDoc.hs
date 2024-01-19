@@ -45,7 +45,7 @@ data Tag
     TagIf Expr [Block] [(Expr, [Block])] (Maybe [Block])
   | TagFor
   | TagAssign
-  | TagUnless
+  | TagUnless Expr [Block] [(Expr, [Block])] (Maybe [Block])
   | TagCase
   | TagCapture
   | TagIncrement
@@ -71,7 +71,7 @@ data BaseExpr
   | ExprLt BaseExpr BaseExpr -- <
   | ExprGeq BaseExpr BaseExpr -- >=
   | ExprLeq BaseExpr BaseExpr -- <=
-  | ExprContains BaseExpr BaseExpr  -- contains
+  | ExprContains BaseExpr BaseExpr -- contains
   deriving (Show, Eq)
 
 type StrLit = Text
@@ -339,9 +339,11 @@ pExpr = do
 
 -- * Tags
 
-pIfTag :: Parser (Unformatted Tag)
-pIfTag = do
-  sTagIf <- inTag "{%" (pSymbol "if" >> pExpr) "%}"
+type IfLikeTag = Expr -> [Block] -> [(Expr, [Block])] -> (Maybe [Block]) -> Tag
+
+pIfLikeTag :: Text -> Text -> IfLikeTag -> Parser (Unformatted Tag)
+pIfLikeTag opener closer tagCtor = do
+  sTagIf <- inTag "{%" (pSymbol opener >> pExpr) "%}"
   conseq <- many (try pBlock)
 
   elsifBranches <- many . try $ do
@@ -354,7 +356,7 @@ pIfTag = do
     blocks <- many (try pBlock)
     pure (sTagElse, blocks)
 
-  sTagEndif <- inTag "{%" (string "endif") "%}"
+  sTagEndif <- inTag "{%" (string closer) "%}"
 
   let elsifTags = fst <$> elsifBranches
   case elseBranch of
@@ -374,7 +376,7 @@ pIfTag = do
         Unformatted
           (beforeTag sTagIf)
           (afterTag sTagEndif)
-          (TagIf (inner sTagIf) fmtConseq fmtAlts (Just fmtFinal))
+          (tagCtor (inner sTagIf) fmtConseq fmtAlts (Just fmtFinal))
     Nothing ->
       let fmtAlts = formatElsifBlocks (beforeTag sTagEndif) elsifBranches
           beforeConseq = afterTag sTagIf
@@ -386,7 +388,13 @@ pIfTag = do
             Unformatted
               (beforeTag sTagIf)
               (afterTag sTagEndif)
-              (TagIf (inner sTagIf) fmtConseq fmtAlts Nothing)
+              (tagCtor (inner sTagIf) fmtConseq fmtAlts Nothing)
+
+pIfTag :: Parser (Unformatted Tag)
+pIfTag = pIfLikeTag "if" "endif" TagIf
+
+pUnlessTag :: Parser (Unformatted Tag)
+pUnlessTag = pIfLikeTag "unless" "endunless" TagUnless
 
 -- | Use @formatElsifBlocks stripAfterLast parsedElsifs@ to format parsed 'elsif' blocks.
 formatElsifBlocks
@@ -420,13 +428,14 @@ formatElsifBlocks afterLast blocks =
       (expr, formatNestedBlocks beforeAlt afterAlt alt)
 
 curlyTagLookAhead :: Text -> Parser Text
-curlyTagLookAhead name = lookAhead (string "{%" >> optional (string "-") >> space >> pSymbol name)
+curlyTagLookAhead name = lookAhead $ string "{%" >> optional (string "-") >> space >> pSymbol name
 
 pTag :: Parser (Unformatted Tag)
 pTag =
   choice -- Note that there is no 'try' here.
     [ inTag "{{" (pExpr <&> TagExpress) "}}"
-    , curlyTagLookAhead "if" >> pIfTag
+    , try (curlyTagLookAhead "if") >> pIfTag
+    , curlyTagLookAhead "unless" >> pUnlessTag
     ]
 
 tagLookAhead :: Parser Text

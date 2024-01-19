@@ -458,6 +458,7 @@ tags = do
   describe "Parse tags" $ do
     expressTags
     ifTags
+    unlessTags
 
 expressTags :: Spec
 expressTags = do
@@ -493,6 +494,45 @@ expressTags = do
     parsedImmExpr imm =
       Right
         (doc [ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr imm []))])
+
+unlessTags :: Spec
+unlessTags = do
+  describe "Parse 'unless' tags" $ do
+    -- NOTE: 'if' and 'unless' tags are the same under the hood.
+    -- So, as long as this holds, it's OK if 'unless' doesn't has
+    -- so many tests.
+    it "Basic 'unless' tags" $ do
+      let input =
+            [r|
+{%- unless blah.x -%}
+  Hey, how are you?
+{% elsif blah.y %}
+  I cannot think of content for this test!
+{%- else -%}
+  Same problem as before
+{%endunless-%}
+|]
+      runDocParse input
+        `shouldBe` parsedUnlessTag
+          (ParseDoc.ImmVar ["blah", "x"])
+          [ParseDoc.Cont "Hey, how are you?\n"]
+          [
+            ( ParseDoc.ImmVar ["blah", "y"]
+            , [ParseDoc.Cont "\n  I cannot think of content for this test!"]
+            )
+          ]
+          (Just [ParseDoc.Cont "\n  Same problem as before\n"])
+  where
+    parsedUnlessTag
+      :: ParseDoc.BaseExpr
+      -> [ParseDoc.Block]
+      -> [(ParseDoc.BaseExpr, [ParseDoc.Block])]
+      -> Maybe [ParseDoc.Block]
+      -> Either String ParseDoc.Doc
+    parsedUnlessTag prd' conseq alts' final =
+      let alts = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> alts'
+          prd = ParseDoc.Expr prd' []
+       in Right (doc [ParseDoc.Tag (ParseDoc.TagUnless prd conseq alts final)])
 
 ifTags :: Spec
 ifTags = do
