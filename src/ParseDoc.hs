@@ -1,5 +1,6 @@
 module ParseDoc (
   Doc (..),
+  empty,
   FrontMatter,
   Block (..),
   Tag (..),
@@ -13,15 +14,17 @@ module ParseDoc (
   Parser,
 ) where
 
-import Control.Applicative hiding (many, some)
+import Control.Applicative hiding (many, some, empty)
+import qualified Control.Applicative as Applicative
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.Functor (($>), (<&>))
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text, pack, stripEnd, stripStart)
 import Data.Void (Void)
+import qualified Data.Monoid as Monoid
 import qualified Data.Yaml as Y
-import Text.Megaparsec hiding (State)
+import Text.Megaparsec hiding (State, empty)
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -33,7 +36,10 @@ data Doc = Doc
   }
   deriving (Show, Eq)
 
-type FrontMatter = Y.Value
+empty :: Doc
+empty = Doc Monoid.mempty []
+
+type FrontMatter = Y.Object
 
 data Block
   = Tag Tag
@@ -42,6 +48,7 @@ data Block
 
 data Tag
   = -- | Predicate Consequent Alternatives Final
+  -- REFACTOR: TagIf (NonEmpty (Expr, [Block])) (Maybe [Block])
     TagIf Expr [Block] [(Expr, [Block])] (Maybe [Block])
   | TagFor
   | TagAssign
@@ -90,7 +97,7 @@ type Parser = Parsec Void Text
 
 -- | Skip one or more white space characters.
 spaceConsumer :: Parser ()
-spaceConsumer = L.space space1 empty empty
+spaceConsumer = L.space space1 Applicative.empty Applicative.empty
 
 -- | Run the given parser and consume trailing white space (whitespace is optional).
 pLexeme :: Parser a -> Parser a
@@ -466,4 +473,4 @@ pDocument = do
     pFrontMatter
   blocks' <- many pBlock <&> formatBlocks
   let blocks = if null blocks' then [Cont ""] else blocks'
-  pure $ Doc (fromMaybe (Y.object []) fm) blocks
+  pure $ Doc (fromMaybe Monoid.mempty fm) blocks

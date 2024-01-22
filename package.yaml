@@ -35,6 +35,8 @@ dependencies:
 - unordered-containers
 - megaparsec
 - raw-strings-qq
+- scientific >= 0.3.7 && <= 0.4
+- vector
 
 ghc-options:
 - -Wall

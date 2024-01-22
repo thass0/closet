@@ -2,7 +2,7 @@ module ParseDocSpec (spec) where
 
 import Data.Either (isLeft)
 import Data.Text (Text)
-import Data.Yaml ((.=))
+import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.Yaml as Y
 import qualified ParseDoc
 import Test.Hspec
@@ -21,7 +21,7 @@ runDocParse :: Text -> Either String ParseDoc.Doc
 runDocParse = runTestParse (ParseDoc.pDocument <* eof)
 
 doc :: [ParseDoc.Block] -> ParseDoc.Doc
-doc p = ParseDoc.Doc (Y.object []) p
+doc p = ParseDoc.Doc Aeson.KeyMap.empty p
 
 -- * Tests
 
@@ -58,10 +58,10 @@ This is the content of this page!|]
         `shouldBe` ( Right $
                       ParseDoc.Doc
                         { ParseDoc.docFrontMatter =
-                            Y.object
-                              [ "name" .= ("This is my name" :: Text)
-                              , "age" .= (41 :: Int)
-                              , "children" .= Y.array ["Child1", "Child2", "Child3"]
+                            Aeson.KeyMap.fromList
+                              [ ("name", Y.String "This is my name" )
+                              , ("age", Y.Number 41)
+                              , ("children", Y.array ["Child1", "Child2", "Child3"])
                               ]
                         , ParseDoc.docBlocks = [ParseDoc.Cont "This is the content of this page!"]
                         }
@@ -78,8 +78,8 @@ Blah is the best filler word possible.|]
         `shouldBe` ( Right $
                       ParseDoc.Doc
                         { ParseDoc.docFrontMatter =
-                            Y.object
-                              ["title" .= ("Blah --- my personal blog about Blah!" :: Text)]
+                            Aeson.KeyMap.fromList
+                              [("title", Y.String "Blah --- my personal blog about Blah!")]
                         , ParseDoc.docBlocks = [ParseDoc.Cont "Blah is the best filler word possible."]
                         }
                    )
@@ -91,7 +91,7 @@ Blah is the best filler word possible.|]
       let input2Unix = "---\ntitle: My blog\n---\n"
       let input2Doc =
             ParseDoc.Doc
-              { ParseDoc.docFrontMatter = Y.object ["title" .= ("My blog" :: Text)]
+              { ParseDoc.docFrontMatter = Aeson.KeyMap.fromList [("title", Y.String "My blog")]
               , ParseDoc.docBlocks = [ParseDoc.Cont ""]
               }
       runDocParse input2Win `shouldBe` Right input2Doc
