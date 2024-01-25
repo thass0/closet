@@ -1,27 +1,12 @@
 module ParseDocSpec (spec) where
 
-import Data.Either (isLeft)
-import Data.Text (Text)
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
+import Data.Either (isLeft)
 import qualified Data.Yaml as Y
+import Helpers (doc, runDocParse)
 import qualified ParseDoc
 import Test.Hspec
-import Text.Megaparsec
 import Text.RawString.QQ (r)
-
--- * Helpers
-
-runTestParse :: ParseDoc.Parser a -> Text -> Either String a
-runTestParse parser input =
-  case runParser parser "<in>" input of
-    Right x -> Right x
-    Left err -> Left (errorBundlePretty err)
-
-runDocParse :: Text -> Either String ParseDoc.Doc
-runDocParse = runTestParse (ParseDoc.pDocument <* eof)
-
-doc :: [ParseDoc.Block] -> ParseDoc.Doc
-doc p = ParseDoc.Doc Aeson.KeyMap.empty p
 
 -- * Tests
 
@@ -59,7 +44,7 @@ This is the content of this page!|]
                       ParseDoc.Doc
                         { ParseDoc.docFrontMatter =
                             Aeson.KeyMap.fromList
-                              [ ("name", Y.String "This is my name" )
+                              [ ("name", Y.String "This is my name")
                               , ("age", Y.Number 41)
                               , ("children", Y.array ["Child1", "Child2", "Child3"])
                               ]
@@ -253,10 +238,10 @@ booleanExpressions = do
           )
 
     it "'<='" $
-      parseCondition "a <= b"
+      parseCondition "a <= true"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              (ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmBool True))
               []
           )
 
@@ -466,6 +451,10 @@ expressTags = do
     it "Basic express tags" $ do
       runDocParse "{{ blah.x }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah", "x"])
+      runDocParse "{{ true }}"
+        `shouldBe` parsedImmExpr (ParseDoc.ImmBool True)
+      runDocParse "{{ false }}"
+        `shouldBe` parsedImmExpr (ParseDoc.ImmBool False)
       runDocParse "{{ blah.x.y.hello.world }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah", "x", "y", "hello", "world"])
       runDocParse "{{ \"Hello, world!\" }}"
@@ -506,7 +495,7 @@ unlessTags = do
             [r|
 {%- unless blah.x -%}
   Hey, how are you?
-{% elsif blah.y %}
+{% elsif false %}
   I cannot think of content for this test!
 {%- else -%}
   Same problem as before
@@ -517,7 +506,7 @@ unlessTags = do
           (ParseDoc.ImmVar ["blah", "x"])
           [ParseDoc.Cont "Hey, how are you?\n"]
           [
-            ( ParseDoc.ImmVar ["blah", "y"]
+            ( ParseDoc.ImmBool False
             , [ParseDoc.Cont "\n  I cannot think of content for this test!"]
             )
           ]

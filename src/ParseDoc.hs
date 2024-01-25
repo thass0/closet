@@ -14,15 +14,15 @@ module ParseDoc (
   Parser,
 ) where
 
-import Control.Applicative hiding (many, some, empty)
+import Control.Applicative hiding (empty, many, some)
 import qualified Control.Applicative as Applicative
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.Functor (($>), (<&>))
 import Data.Maybe (fromMaybe, isJust)
+import qualified Data.Monoid as Monoid
 import Data.Text (Text, pack, stripEnd, stripStart)
 import Data.Void (Void)
-import qualified Data.Monoid as Monoid
 import qualified Data.Yaml as Y
 import Text.Megaparsec hiding (State, empty)
 import Text.Megaparsec.Char
@@ -48,7 +48,7 @@ data Block
 
 data Tag
   = -- | Predicate Consequent Alternatives Final
-  -- REFACTOR: TagIf (NonEmpty (Expr, [Block])) (Maybe [Block])
+    -- REFACTOR: TagIf (NonEmpty (Expr, [Block])) (Maybe [Block])
     TagIf Expr [Block] [(Expr, [Block])] (Maybe [Block])
   | TagFor
   | TagAssign
@@ -70,6 +70,7 @@ data BaseExpr
   = ImmVar Var
   | ImmStrLit StrLit
   | ImmNum Number
+  | ImmBool Bool
   | ExprAnd BaseExpr BaseExpr -- and
   | ExprOr BaseExpr BaseExpr -- or
   | ExprEq BaseExpr BaseExpr -- ==
@@ -243,11 +244,17 @@ pStrLit = startChar *> bodyClosed <&> pack
     bodyClosed = manyTill L.charLiteral endChar <?> "body of string"
     endChar = char '\"' <?> "end of string"
 
+pBool :: Parser Bool
+pBool =
+  string "true" $> True
+    <|> string "false" $> False
+
 pImmExpr :: Parser BaseExpr
 pImmExpr =
   choice $
     try
-      <$> [ pVar <&> ImmVar
+      <$> [ pBool <&> ImmBool
+          , pVar <&> ImmVar
           , pNum <&> ImmNum
           , pStrLit <&> ImmStrLit
           ]

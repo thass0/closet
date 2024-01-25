@@ -87,6 +87,7 @@ test-suite closet-test
   main-is: Spec.hs
   other-modules:
       EvalDocSpec
+      Helpers
       ParseDocSpec
       ProjectConfigSpec
       ResourcesSpec

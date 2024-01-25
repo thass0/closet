@@ -2,6 +2,10 @@
     "cSpell.words": [
         "Aeson",
         "Conseq",
-        "rhss"
+        "mempty",
+        "Monoid",
+        "predic",
+        "rhss",
+        "strs"
     ]
 }
