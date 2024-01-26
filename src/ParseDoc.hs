@@ -23,6 +23,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Monoid as Monoid
+import Data.Scientific
 import Data.Text (Text, pack, stripEnd, stripStart)
 import Data.Void (Void)
 import qualified Data.Yaml as Y
@@ -84,9 +85,7 @@ data BaseExpr
 
 type StrLit = Text
 
-type Number =
-  Int
-  -- ^ TODO: There are floats and integers in liquid.
+type Number = Scientific
 
 type Var = [Ident]
 
@@ -224,18 +223,16 @@ pIdents = sepBy1 pIdent (string ".")
 pVar :: Parser Var
 pVar = pIdents
 
-pInteger :: Parser Int
-pInteger = pIntegerInner <?> "number"
-  where
-    pIntegerInner = do
-      minusSign <- optional (char '-')
-      value <- pLexeme L.decimal
-      if isJust minusSign
-        then pure (negate value)
-        else pure value
+pScientific :: Parser Scientific
+pScientific = do
+  minusSign <- optional (char '-')
+  value <- pLexeme L.scientific
+  if isJust minusSign
+    then pure (negate value)
+    else pure value
 
 pNum :: Parser Number
-pNum = pInteger
+pNum = pScientific <?> "number"
 
 pStrLit :: Parser Text
 pStrLit = startChar *> bodyClosed <&> pack

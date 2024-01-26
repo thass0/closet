@@ -463,6 +463,12 @@ expressTags = do
         `shouldBe` parsedImmExpr (ParseDoc.ImmNum 543)
       runDocParse "{{ -61 }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmNum (-61))
+      runDocParse "{{ 3.141 }}"
+        `shouldBe` parsedImmExpr (ParseDoc.ImmNum 3.141)
+      runDocParse "{{ 1e7 }}"
+        `shouldBe` parsedImmExpr (ParseDoc.ImmNum 1e7)
+      runDocParse "{{ 4e-1 }}"
+        `shouldBe` parsedImmExpr (ParseDoc.ImmNum 0.4)
       runDocParse "{{blah}}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah"])
     it "Invalid express tags" $ do

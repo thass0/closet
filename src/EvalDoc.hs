@@ -88,7 +88,7 @@ evalExpr env (Expr base filters) =
             Nothing ->
               error $ "symbol lookup error: no variable called '" <> showSym var <> "' exists"
         ImmStrLit str -> Str str
-        ImmNum num -> Num (fromIntegral num)
+        ImmNum num -> Num num
         ImmBool b -> Bool b
         ExprAnd a b ->
           if isTruthy (evalBase a)
@@ -115,10 +115,10 @@ evalExpr env (Expr base filters) =
     applyFilter _ v (FilterExpr ident args) =
       case (ident, args) of
         ("times", [s]) -> case (v, s) of
-          (Num vn, ImmNum sn) -> Num (vn * fromIntegral sn)
+          (Num vn, ImmNum sn) -> Num (vn * sn)
           _ -> error "type error in 'times'"
         ("sum", [s]) -> case (v, s) of
-          (Num vn, ImmNum sn) -> Num (vn + fromIntegral sn)
+          (Num vn, ImmNum sn) -> Num (vn + sn)
           _ -> error "type error in 'sum'"
         _ -> error "filter not yet implemented"
 
