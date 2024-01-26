@@ -19,6 +19,8 @@ import qualified Control.Applicative as Applicative
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
 import Data.Functor (($>), (<&>))
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Monoid as Monoid
 import Data.Text (Text, pack, stripEnd, stripStart)
@@ -47,12 +49,10 @@ data Block
   deriving (Show, Eq)
 
 data Tag
-  = -- | Predicate Consequent Alternatives Final
-    -- REFACTOR: TagIf (NonEmpty (Expr, [Block])) (Maybe [Block])
-    TagIf Expr [Block] [(Expr, [Block])] (Maybe [Block])
+  = TagIf (NE.NonEmpty (Expr, [Block])) (Maybe [Block])
   | TagFor
   | TagAssign
-  | TagUnless Expr [Block] [(Expr, [Block])] (Maybe [Block])
+  | TagUnless (NE.NonEmpty (Expr, [Block])) (Maybe [Block])
   | TagCase
   | TagCapture
   | TagIncrement
@@ -128,7 +128,7 @@ pAnything = satisfy (const True)
 data Unformatted a = Unformatted
   { beforeTag :: Bool
   , afterTag :: Bool
-  , inner :: a
+  , innerTag :: a
   }
   deriving (Show, Eq)
 
@@ -192,7 +192,7 @@ inTag open x close = do
   sb <- (string open *> optional (string "-") <* space) <&> isJust
   ret <- x
   sa <- (space *> optional (string "-") <* string close) <&> isJust
-  pure Unformatted{beforeTag = sb, afterTag = sa, inner = ret}
+  pure Unformatted{beforeTag = sb, afterTag = sa, innerTag = ret}
 
 -- * Front Matter
 
@@ -353,7 +353,7 @@ pExpr = do
 
 -- * Tags
 
-type IfLikeTag = Expr -> [Block] -> [(Expr, [Block])] -> (Maybe [Block]) -> Tag
+type IfLikeTag = NE.NonEmpty (Expr, [Block]) -> Maybe [Block] -> Tag
 
 pIfLikeTag :: Text -> Text -> IfLikeTag -> Parser (Unformatted Tag)
 pIfLikeTag opener closer tagCtor = do
@@ -390,7 +390,7 @@ pIfLikeTag opener closer tagCtor = do
         Unformatted
           (beforeTag sTagIf)
           (afterTag sTagEndif)
-          (tagCtor (inner sTagIf) fmtConseq fmtAlts (Just fmtFinal))
+          (tagCtor ((innerTag sTagIf, fmtConseq) :| fmtAlts) (Just fmtFinal))
     Nothing ->
       let fmtAlts = formatElsifBlocks (beforeTag sTagEndif) elsifBranches
           beforeConseq = afterTag sTagIf
@@ -402,7 +402,7 @@ pIfLikeTag opener closer tagCtor = do
             Unformatted
               (beforeTag sTagIf)
               (afterTag sTagEndif)
-              (tagCtor (inner sTagIf) fmtConseq fmtAlts Nothing)
+              (tagCtor ((innerTag sTagIf, fmtConseq) :| fmtAlts) Nothing)
 
 pIfTag :: Parser (Unformatted Tag)
 pIfTag = pIfLikeTag "if" "endif" TagIf

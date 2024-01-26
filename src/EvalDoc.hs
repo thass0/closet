@@ -12,6 +12,7 @@ import qualified Data.Aeson.Key as Aeson.Key
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.HashMap.Lazy as Map
 import Data.List (find)
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe (isJust)
 import Data.Scientific
 import Data.Text (Text, intercalate, isInfixOf, pack, unpack)
@@ -58,22 +59,19 @@ eval env' doc =
     evalBlock (e, t) (Cont c) = (e, t <> c)
     evalBlock (e, t) (Tag n) =
       case n of
-        TagIf predic conseq alts final ->
-          let r = evalExpr e predic
-           in if isTruthy r
-                then foldl evalBlock (e, t) conseq
-                else case findAlt e alts of
-                  Just altBlocks -> foldl evalBlock (e, t) altBlocks
-                  Nothing -> case final of
-                    Just finalBlocks -> foldl evalBlock (e, t) finalBlocks
-                    Nothing -> (e, t) -- There's nothing to change.
+        TagIf branches final ->
+          case findBranch e branches of
+            Just blocks -> foldl evalBlock (e, t) blocks
+            Nothing -> case final of
+              Just finalBlocks -> foldl evalBlock (e, t) finalBlocks
+              Nothing -> (e, t) -- There's nothing to change.
         TagExpress expr ->
           let r = evalExpr e expr
            in (e, t <> literal r)
         _ -> error "not yet implemented"
 
-    findAlt :: Env -> [(Expr, [Block])] -> Maybe [Block]
-    findAlt e alts = snd <$> find (isTruthy . evalExpr e . fst) alts
+    findBranch :: Env -> NE.NonEmpty (Expr, [Block]) -> Maybe [Block]
+    findBranch e branches = snd <$> find (isTruthy . evalExpr e . fst) branches
 
 evalExpr :: Env -> Expr -> Value
 evalExpr env (Expr base filters) =

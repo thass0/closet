@@ -2,6 +2,8 @@ module ParseDocSpec (spec) where
 
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Either (isLeft)
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Yaml as Y
 import Helpers (doc, runDocParse)
 import qualified ParseDoc
@@ -263,9 +265,7 @@ booleanExpressions = do
         doc
           [ ParseDoc.Tag
               ( ParseDoc.TagIf
-                  e
-                  [ParseDoc.Cont "Blah"]
-                  []
+                  (NE.singleton (e, [ParseDoc.Cont "Blah"]))
                   Nothing
               )
           ]
@@ -521,7 +521,7 @@ unlessTags = do
     parsedUnlessTag prd' conseq alts' final =
       let alts = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> alts'
           prd = ParseDoc.Expr prd' []
-       in Right (doc [ParseDoc.Tag (ParseDoc.TagUnless prd conseq alts final)])
+       in Right (doc [ParseDoc.Tag (ParseDoc.TagUnless ((prd, conseq) :| alts) final)])
 
 ifTags :: Spec
 ifTags = do
@@ -534,11 +534,14 @@ Heisenberg
 Mr. White
 {% endif %}|]
       runDocParse input
-        `shouldBe` parsedIfTag
-          (ParseDoc.ImmVar ["say_my_name"])
-          [ParseDoc.Cont "\nHeisenberg\n"]
-          []
-          (Just [ParseDoc.Cont "\nMr. White\n"])
+        `shouldBe` ( parsedIfTag
+                      ( NE.singleton
+                          ( (ParseDoc.ImmVar ["say_my_name"])
+                          , [ParseDoc.Cont "\nHeisenberg\n"]
+                          )
+                      )
+                      (Just [ParseDoc.Cont "\nMr. White\n"])
+                   )
 
     it "Nested 'if' tags" $ do
       let input =
@@ -553,49 +556,64 @@ Baz
 {% endif %}|]
       runDocParse input
         `shouldBe` parsedIfTag
-          (ParseDoc.ImmVar ["blah"])
-          [ ParseDoc.Cont "\n"
-          , ParseDoc.Tag
-              ( ParseDoc.TagIf
-                  (immVar ["blah", "x"])
-                  [ParseDoc.Cont "\nFoo\n"]
-                  []
-                  (Just [ParseDoc.Cont "\nBar\n"])
+          ( NE.singleton
+              ( (ParseDoc.ImmVar ["blah"])
+              ,
+                [ ParseDoc.Cont "\n"
+                , ParseDoc.Tag
+                    ( ParseDoc.TagIf
+                        ( NE.singleton
+                            ( (immVar ["blah", "x"])
+                            , [ParseDoc.Cont "\nFoo\n"]
+                            )
+                        )
+                        (Just [ParseDoc.Cont "\nBar\n"])
+                    )
+                , ParseDoc.Cont "\n"
+                ]
               )
-          , ParseDoc.Cont "\n"
-          ]
-          []
+          )
           (Just [ParseDoc.Cont "\nBaz\n"])
       let input2 =
             "{%if a%}{%if b%}{%if c%}Foo{%else%}Bar{%endif%}{%else%}Baz{%endif%}{%else%}Blah{%endif%}"
       runDocParse input2
         `shouldBe` parsedIfTag
-          (ParseDoc.ImmVar ["a"])
-          [ ParseDoc.Tag
-              ( ParseDoc.TagIf
-                  (immVar ["b"])
-                  [ ParseDoc.Tag
-                      ( ParseDoc.TagIf
-                          (immVar ["c"])
-                          [ParseDoc.Cont "Foo"]
-                          []
-                          (Just [ParseDoc.Cont "Bar"])
-                      )
-                  ]
-                  []
-                  (Just [ParseDoc.Cont "Baz"])
+          ( NE.singleton
+              ( (ParseDoc.ImmVar ["a"])
+              ,
+                [ ParseDoc.Tag
+                    ( ParseDoc.TagIf
+                        ( NE.singleton
+                            ( immVar ["b"]
+                            ,
+                              [ ParseDoc.Tag
+                                  ( ParseDoc.TagIf
+                                      ( NE.singleton
+                                          ( immVar ["c"]
+                                          , [ParseDoc.Cont "Foo"]
+                                          )
+                                      )
+                                      (Just [ParseDoc.Cont "Bar"])
+                                  )
+                              ]
+                            )
+                        )
+                        (Just [ParseDoc.Cont "Baz"])
+                    )
+                ]
               )
-          ]
-          []
+          )
           (Just [ParseDoc.Cont "Blah"])
 
     it "'if' tag without alternative" $ do
       let input = "{% if 512 %}I love powers of two!{% endif %}"
       runDocParse input
         `shouldBe` parsedIfTag
-          (ParseDoc.ImmNum 512)
-          [ParseDoc.Cont "I love powers of two!"]
-          []
+          ( NE.singleton
+              ( (ParseDoc.ImmNum 512)
+              , [ParseDoc.Cont "I love powers of two!"]
+              )
+          )
           Nothing
 
     it "Strip away white space around 'if' tags" $ do
@@ -616,16 +634,20 @@ Foo
           ( doc
               [ ParseDoc.Tag
                   ( ParseDoc.TagIf
-                      (immVar ["x"])
-                      [ParseDoc.Cont "\nBlah"]
-                      []
+                      ( NE.singleton
+                          ( immVar ["x"]
+                          , [ParseDoc.Cont "\nBlah"]
+                          )
+                      )
                       (Just [ParseDoc.Cont "Not Blah\n"])
                   )
               , ParseDoc.Tag
                   ( ParseDoc.TagIf
-                      (immVar ["y"])
-                      [ParseDoc.Cont "\n Baz"]
-                      []
+                      ( NE.singleton
+                          ( immVar ["y"]
+                          , [ParseDoc.Cont "\n Baz"]
+                          )
+                      )
                       Nothing
                   )
               , ParseDoc.Cont "Foo\n"
@@ -646,10 +668,9 @@ Baz
 |]
         runDocParse input
         `shouldBe` parsedIfTag
-          (ParseDoc.ImmVar ["x"])
-          [ParseDoc.Cont "Foo"]
-          [ (ParseDoc.ImmVar ["y"], [ParseDoc.Cont "Bar"])
-          ]
+          ( (ParseDoc.ImmVar ["x"], [ParseDoc.Cont "Foo"])
+              :| [(ParseDoc.ImmVar ["y"], [ParseDoc.Cont "Bar"])]
+          )
           (Just [ParseDoc.Cont "Baz"])
 
     it "'if' tags with 'elsif' and without 'else'" $ do
@@ -667,23 +688,22 @@ Four
 |]
       runDocParse input
         `shouldBe` parsedIfTag
-          (ParseDoc.ImmVar ["one"])
-          [ParseDoc.Cont "One"]
-          [ (ParseDoc.ImmVar ["two"], [ParseDoc.Cont "Two"])
-          , (ParseDoc.ImmVar ["three"], [ParseDoc.Cont "Three"])
-          , (ParseDoc.ImmVar ["four"], [ParseDoc.Cont "Four"])
-          ]
+          ( ( ParseDoc.ImmVar ["one"]
+            , [ParseDoc.Cont "One"]
+            )
+              :| [ (ParseDoc.ImmVar ["two"], [ParseDoc.Cont "Two"])
+                 , (ParseDoc.ImmVar ["three"], [ParseDoc.Cont "Three"])
+                 , (ParseDoc.ImmVar ["four"], [ParseDoc.Cont "Four"])
+                 ]
+          )
           Nothing
   where
     parsedIfTag
-      :: ParseDoc.BaseExpr
-      -> [ParseDoc.Block]
-      -> [(ParseDoc.BaseExpr, [ParseDoc.Block])]
+      :: NE.NonEmpty (ParseDoc.BaseExpr, [ParseDoc.Block])
       -> Maybe [ParseDoc.Block]
       -> Either String ParseDoc.Doc
-    parsedIfTag prd' conseq alts' final =
-      let alts = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> alts'
-          prd = ParseDoc.Expr prd' []
-       in Right (doc [ParseDoc.Tag (ParseDoc.TagIf prd conseq alts final)])
+    parsedIfTag branches' final =
+      let branches = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> branches'
+       in Right (doc [ParseDoc.Tag (ParseDoc.TagIf branches final)])
     immVar :: ParseDoc.Var -> ParseDoc.Expr
     immVar v = ParseDoc.Expr (ParseDoc.ImmVar v) []
