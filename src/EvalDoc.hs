@@ -27,7 +27,8 @@ data Value
   | Map SymMap
   | Bool Bool
   | Nil
-  deriving (Show, Eq)
+  | Empty
+  deriving (Show)
 
 type Env = SymMap
 
@@ -38,6 +39,23 @@ type Symbol = [Text] -- Same as Var in ParseDoc.
 empty :: Env
 empty = Map.empty
 
+instance Eq Value where
+  (==) :: Value -> Value -> Bool
+  v1 == v2 =
+    case (v1, v2) of
+      (Array a, Empty) -> null a
+      (Empty, Array a) -> null a
+      (Str s, Empty) -> s == ""
+      (Empty, Str s) -> s == ""
+      (Str s1, Str s2) -> s1 == s2
+      (Num n1, Num n2) -> n1 == n2
+      (Array a1, Array a2) -> a1 == a2
+      (Map m1, Map m2) -> m1 == m2
+      (Bool b1, Bool b2) -> b1 == b2
+      (Nil, Nil) -> True
+      (Empty, Empty) -> True
+      _ -> False
+
 instance Ord Value where
   (<=) :: Value -> Value -> Bool
   v1 <= v2 =
@@ -47,13 +65,12 @@ instance Ord Value where
       (Array a1, Array a2) -> length a1 <= length a2
       (Map m1, Map m2) -> length m1 <= length m2
       (Bool b1, Bool b2) -> not (b1 && not b2)
-      (Nil, Nil) -> True
-      (_, _) -> error "cannot compare different types"
+      (_, _) -> error "cannot compare types"
 
 eval :: Env -> Doc -> (Env, Text)
 eval env' doc =
   let env = env' <> fromFrontMatter (docFrontMatter doc)
-   in foldl evalBlock (env, "") (docBlocks doc)
+  in foldl evalBlock (env, "") (docBlocks doc)
   where
     evalBlock :: (Env, Text) -> Block -> (Env, Text)
     evalBlock (e, t) (Cont c) = (e, t <> c)
@@ -65,6 +82,12 @@ eval env' doc =
             Nothing -> case final of
               Just finalBlocks -> foldl evalBlock (e, t) finalBlocks
               Nothing -> (e, t) -- There's nothing to change.
+        TagUnless branches final ->
+          case findUnlessBranch e branches of
+            Just blocks -> foldl evalBlock (e, t) blocks
+            Nothing -> case final of
+              Just finalBlocks -> foldl evalBlock (e, t) finalBlocks
+              Nothing -> (e, t) -- There's nothing to change.
         TagExpress expr ->
           let r = evalExpr e expr
            in (e, t <> literal r)
@@ -72,6 +95,15 @@ eval env' doc =
 
     findBranch :: Env -> NE.NonEmpty (Expr, [Block]) -> Maybe [Block]
     findBranch e branches = snd <$> find (isTruthy . evalExpr e . fst) branches
+
+    findUnlessBranch :: Env -> NE.NonEmpty (Expr, [Block]) -> Maybe [Block]
+    findUnlessBranch e branches =
+      case NE.toList branches of
+        [(expr, c)] ->
+          if isTruthy (evalExpr e expr)
+            then Nothing
+            else Just c
+        bs -> snd <$> find (isTruthy . evalExpr e . fst) bs
 
 evalExpr :: Env -> Expr -> Value
 evalExpr env (Expr base filters) =
@@ -90,6 +122,7 @@ evalExpr env (Expr base filters) =
         ImmStrLit str -> Str str
         ImmNum num -> Num num
         ImmBool b -> Bool b
+        ImmNil -> Nil
         ExprAnd a b ->
           if isTruthy (evalBase a)
             then Bool (isTruthy (evalBase b))
@@ -148,7 +181,8 @@ literal v =
     Map m -> "{ " <> intercalate ", " (literalMap m) <> " }"
     Bool True -> "true"
     Bool False -> "false"
-    Nil -> "nil"
+    Empty -> ""
+    Nil -> ""
   where
     literalSymbol :: Symbol -> Text
     literalSymbol = intercalate "."

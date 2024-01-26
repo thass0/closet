@@ -12,6 +12,7 @@ spec :: Spec
 spec = do
   describe "Evaluate documents" $ do
     ifTags
+    unlessTags
     expressTags
     it "Simple eval" $ do
       Eval.eval Map.empty (Parse.Doc (Aeson.KeyMap.fromList [("key", "value")]) [])
@@ -118,3 +119,36 @@ ifTags = do
 {%- endif -%}|]
       let env = Map.fromList [(["blah"], Eval.Nil), (["foo"], Eval.Bool False)]
       Eval.eval env doc `shouldBe` (env, "Oh, at last!")
+
+unlessTags :: Spec
+unlessTags = do
+  describe "Evaluate 'unless' tags" $ do
+    it "Unless empty string" $ do
+      let doc = runDocParse' [r|
+{%- unless page == empty -%}
+  <h1>{{ title }}</h1>
+  <div>{{ content }}</div>
+{%- endunless -%}
+|]
+      let env = Map.fromList
+                  [ (["page"], Eval.Str "")
+                  , (["title"], Eval.Str "Foo")
+                  , (["content"], Eval.Str "Bar") ]
+      Eval.eval env doc
+        `shouldBe`
+        (env, "<h1>Foo</h1>\n  <div>Bar</div>")
+
+    it "Unless empty array" $ do
+      let doc = runDocParse' [r|
+{%- unless pages == empty -%}
+  <h1>{{ title }}</h1>
+  <div>{{ content }}</div>
+{%- endunless -%}
+|]
+      let env = Map.fromList
+                  [ (["pages"], Eval.Array [])
+                  , (["title"], Eval.Str "Foo")
+                  , (["content"], Eval.Str "Bar") ]
+      Eval.eval env doc
+        `shouldBe`
+        (env, "<h1>Foo</h1>\n  <div>Bar</div>")

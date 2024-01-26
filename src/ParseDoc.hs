@@ -72,6 +72,7 @@ data BaseExpr
   | ImmStrLit StrLit
   | ImmNum Number
   | ImmBool Bool
+  | ImmNil
   | ExprAnd BaseExpr BaseExpr -- and
   | ExprOr BaseExpr BaseExpr -- or
   | ExprEq BaseExpr BaseExpr -- ==
@@ -246,11 +247,15 @@ pBool =
   string "true" $> True
     <|> string "false" $> False
 
+pEmpty :: Parser ()
+pEmpty = void (string "empty")
+
 pImmExpr :: Parser BaseExpr
 pImmExpr =
   choice $
     try
       <$> [ pBool <&> ImmBool
+          , pEmpty $> ImmNil
           , pVar <&> ImmVar
           , pNum <&> ImmNum
           , pStrLit <&> ImmStrLit

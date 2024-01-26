@@ -146,12 +146,12 @@ booleanExpressions = do
           )
 
     it "'<=' and '!=' have higher precedence than 'or'" $ do
-      parseCondition "a <= b or c != d"
+      parseCondition "empty <= b or c != d"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
               ( ParseDoc.ExprOr
                   ( ParseDoc.ExprLeq
-                      (ParseDoc.ImmVar ["a"])
+                      ParseDoc.ImmNil
                       (ParseDoc.ImmVar ["b"])
                   )
                   ( ParseDoc.ExprNeq
@@ -471,6 +471,7 @@ expressTags = do
         `shouldBe` parsedImmExpr (ParseDoc.ImmNum 0.4)
       runDocParse "{{blah}}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah"])
+      runDocParse "{{empty}}" `shouldBe` parsedImmExpr ParseDoc.ImmNil
     it "Invalid express tags" $ do
       runDocParse "{{ blah!x }}" `shouldSatisfy` isLeft
       runDocParse "{{ blah.x. }}" `shouldSatisfy` isLeft
