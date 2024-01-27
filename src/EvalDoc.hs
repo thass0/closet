@@ -34,7 +34,7 @@ type Env = SymMap
 
 type SymMap = Map.HashMap Symbol Value
 
-type Symbol = [Text] -- Same as Var in ParseDoc.
+type Symbol = Text
 
 empty :: Env
 empty = Map.empty
@@ -114,11 +114,7 @@ evalExpr env (Expr base filters) =
     evalBase :: BaseExpr -> Value
     evalBase expr =
       case expr of
-        ImmVar var ->
-          case Map.lookup var env of
-            Just val -> val
-            Nothing ->
-              error $ "symbol lookup error: no variable called '" <> showSym var <> "' exists"
+        ImmVar var -> lookupVar env var
         ImmStrLit str -> Str str
         ImmNum num -> Num num
         ImmBool b -> Bool b
@@ -142,6 +138,22 @@ evalExpr env (Expr base filters) =
             (Str super, Str sub) -> Bool (sub `isInfixOf` super)
             (Array strs, str) -> Bool (isJust (find (== str) strs))
             _ -> error "'contains' can only find substrings and strings in arrays"
+ 
+    -- Lookup a variable in a map.
+    lookupVar :: SymMap -> [Symbol] -> Value
+    lookupVar symMap path =
+      case lookupVarInner symMap path of 
+        Just v -> v
+        Nothing ->
+              error $ "symbol lookup error: no variable called '" <> showPath path <> "' exists"
+      where
+        lookupVarInner :: SymMap -> [Symbol] -> Maybe Value
+        lookupVarInner m [p] = Map.lookup p m
+        lookupVarInner m (p:ps) =
+          case Map.lookup p m of 
+            Just (Map m') -> lookupVarInner m' ps
+            x -> x
+        lookupVarInner _ [] = Nothing
 
     -- Apply a single filter expression to a value.
     applyFilter :: Env -> Value -> FilterExpr -> Value
@@ -164,9 +176,8 @@ isTruthy v =
     -- Empty string, empty array, and 0 are truthy, too.
     _ -> True
 
--- Print a symbol in the form it was originally parsed.
-showSym :: Symbol -> String
-showSym s = unpack $ intercalate "." s
+showPath :: [Symbol] -> String
+showPath s = unpack $ intercalate "." s
 
 -- Convert a value to a literal string that can be
 -- added to the output document.
@@ -181,7 +192,6 @@ literal tlv =
     literal' v =
       case v of
         Str s -> s
-        -- Num n -> pack (show n)
         Num n ->
           pack $ case floatingOrInteger n of
             Left real -> show (real :: Double)
@@ -194,10 +204,7 @@ literal tlv =
         Nil -> ""
 
     literalMap :: SymMap -> [Text]
-    literalMap = map (\(k, v') -> literalSymbol k <> ": " <> literal' v') . Map.toList
-
-    literalSymbol :: Symbol -> Text
-    literalSymbol = intercalate "."
+    literalMap = map (\(k, v') -> k <> ": " <> literal' v') . Map.toList
 
 fromFrontMatter :: Aeson.KeyMap.KeyMap Y.Value -> SymMap
 fromFrontMatter = fromYamlMap
@@ -215,4 +222,4 @@ fromFrontMatter = fromYamlMap
     fromYamlMap :: Aeson.KeyMap.KeyMap Y.Value -> SymMap
     fromYamlMap a = Map.fromList (map f (Aeson.KeyMap.toList a))
       where
-        f (k, v) = ([Aeson.Key.toText k], fromYaml v)
+        f (k, v) = (Aeson.Key.toText k, fromYaml v)

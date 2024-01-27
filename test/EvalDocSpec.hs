@@ -16,7 +16,7 @@ spec = do
     expressTags
     it "Simple eval" $ do
       Eval.eval Map.empty (Parse.Doc (Aeson.KeyMap.fromList [("key", "value")]) [])
-        `shouldBe` (Map.fromList [(["key"], Eval.Str "value")], "")
+        `shouldBe` (Map.fromList [("key", Eval.Str "value")], "")
       Eval.eval
         Map.empty
         (Parse.Doc Aeson.KeyMap.empty [Parse.Cont "blah", Parse.Cont "blah"])
@@ -27,7 +27,7 @@ expressTags = do
   describe "Evaluate '{{}}' express tags" $ do
     it "display strings" $ do
       let doc = runDocParse' [r|{{ "hey" }}, {{ x }}|]
-      let env = Map.fromList [(["x"], Eval.Str "blah")]
+      let env = Map.fromList [("x", Eval.Str "blah")]
       Eval.eval env doc `shouldBe` (env, "hey, blah")
 
     it "display arrays" $ do
@@ -40,14 +40,14 @@ expressTags = do
       let env =
             Map.fromList
               [
-                ( ["small_array"]
+                ( "small_array"
                 , Eval.Array [Eval.Str "one", Eval.Str "two"]
                 )
               ,
-                ( ["nested_arrays"]
+                ( "nested_arrays"
                 , Eval.Array
                     [ Eval.Array [Eval.Str "three", Eval.Str "four"]
-                    , Eval.Map (Map.fromList [(["x"], Eval.Num 40)])
+                    , Eval.Map (Map.fromList [("x", Eval.Num 40)])
                     ]
                 )
               ]
@@ -59,26 +59,26 @@ expressTags = do
       let env =
             Map.fromList
               [
-                ( ["the_map"]
+                ( "the_map"
                 , Eval.Map
                     ( Map.fromList
-                        [ (["key"], Eval.Str "value")
+                        [ ("key", Eval.Str "value")
                         ,
-                          ( ["next_map"]
+                          ( "next_map"
                           , Eval.Map
-                              (Map.fromList [(["key"], Eval.Str "value")])
+                              (Map.fromList [("key", Eval.Str "value")])
                           )
-                        , (["arr"], Eval.Array [Eval.Num 3, Eval.Num 2.6])
+                        , ("arr", Eval.Array [Eval.Num 3, Eval.Num 2.6])
                         ]
                     )
                 )
               ]
       Eval.eval env doc
-        `shouldBe` (env, "key: value, arr: [3, 2.6], next_map: { key: value }")
+        `shouldBe` (env, "arr: [3, 2.6], next_map: { key: value }, key: value")
 
     it "display booleans" $ do
       let doc = runDocParse' "{{ true }} is not {{ x }}"
-      let env = Map.fromList [(["x"], Eval.Bool False)]
+      let env = Map.fromList [("x", Eval.Bool False)]
       Eval.eval env doc `shouldBe` (env, "true is not false")
 
 ifTags :: Spec
@@ -92,7 +92,8 @@ ifTags = do
   {{ foo.bar }}
 {%- endif -%}
 |]
-      let env = Map.fromList [(["foo", "bar"], Eval.Str "baz")]
+      let env = Map.fromList
+                  [("foo", Eval.Map (Map.fromList [("bar", Eval.Str "baz")]))]
       Eval.eval env doc `shouldBe` (env, "baz")
 
     it "'if' tag (doesn't execute)" $ do
@@ -122,7 +123,7 @@ ifTags = do
 {%- elsif foo -%}
   No, really this happens!
 {%- endif -%}|]
-      let env = Map.fromList [(["blah"], Eval.Nil), (["foo"], Eval.Bool True)]
+      let env = Map.fromList [("blah", Eval.Nil), ("foo", Eval.Bool True)]
       Eval.eval env doc `shouldBe` (env, "No, really this happens!")
 
     it "'if' with elsif and else" $ do
@@ -138,7 +139,7 @@ ifTags = do
 {%- else -%}
   Oh, at last!
 {%- endif -%}|]
-      let env = Map.fromList [(["blah"], Eval.Nil), (["foo"], Eval.Bool False)]
+      let env = Map.fromList [("blah", Eval.Nil), ("foo", Eval.Bool False)]
       Eval.eval env doc `shouldBe` (env, "Oh, at last!")
 
 unlessTags :: Spec
@@ -155,9 +156,9 @@ unlessTags = do
 |]
       let env =
             Map.fromList
-              [ (["page"], Eval.Str "")
-              , (["title"], Eval.Str "Foo")
-              , (["content"], Eval.Str "Bar")
+              [ ("page", Eval.Str "")
+              , ("title", Eval.Str "Foo")
+              , ("content", Eval.Str "Bar")
               ]
       Eval.eval env doc
         `shouldBe` (env, "<h1>Foo</h1>\n  <div>Bar</div>")
@@ -173,9 +174,9 @@ unlessTags = do
 |]
       let env =
             Map.fromList
-              [ (["pages"], Eval.Array [])
-              , (["title"], Eval.Str "Foo")
-              , (["content"], Eval.Str "Bar")
+              [ ("pages", Eval.Array [])
+              , ("title", Eval.Str "Foo")
+              , ("content", Eval.Str "Bar")
               ]
       Eval.eval env doc
         `shouldBe` (env, "<h1>Foo</h1>\n  <div>Bar</div>")
