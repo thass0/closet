@@ -70,7 +70,7 @@ instance Ord Value where
 eval :: Env -> Doc -> (Env, Text)
 eval env' doc =
   let env = env' <> fromFrontMatter (docFrontMatter doc)
-  in foldl evalBlock (env, "") (docBlocks doc)
+   in foldl evalBlock (env, "") (docBlocks doc)
   where
     evalBlock :: (Env, Text) -> Block -> (Env, Text)
     evalBlock (e, t) (Cont c) = (e, t <> c)
@@ -171,24 +171,33 @@ showSym s = unpack $ intercalate "." s
 -- Convert a value to a literal string that can be
 -- added to the output document.
 literal :: Value -> Text
-literal v =
-  case v of
-    Str s -> s
-    Num n -> pack (show n)
-    -- TODO: Omit [] if the array has a depth of one.
-    Array a -> "[" <> intercalate ", " (map literal a) <> "]"
-    -- TODO: Omit {} if the map has a depth of one.
-    Map m -> "{ " <> intercalate ", " (literalMap m) <> " }"
-    Bool True -> "true"
-    Bool False -> "false"
-    Empty -> ""
-    Nil -> ""
+literal tlv =
+  -- Arrays and maps are not enclosed by parentheses on the top level.
+  case tlv of
+    Array a -> intercalate ", " (map literal' a)
+    Map m -> intercalate ", " (literalMap m)
+    tlv' -> literal' tlv'
   where
-    literalSymbol :: Symbol -> Text
-    literalSymbol = intercalate "."
+    literal' v =
+      case v of
+        Str s -> s
+        -- Num n -> pack (show n)
+        Num n ->
+          pack $ case floatingOrInteger n of
+            Left real -> show (real :: Double)
+            Right int -> show (int :: Int)
+        Array a -> "[" <> intercalate ", " (map literal' a) <> "]"
+        Map m -> "{ " <> intercalate ", " (literalMap m) <> " }"
+        Bool True -> "true"
+        Bool False -> "false"
+        Empty -> ""
+        Nil -> ""
 
     literalMap :: SymMap -> [Text]
-    literalMap = map (\(k, v') -> literalSymbol k <> ": " <> literal v') . Map.toList
+    literalMap = map (\(k, v') -> literalSymbol k <> ": " <> literal' v') . Map.toList
+
+    literalSymbol :: Symbol -> Text
+    literalSymbol = intercalate "."
 
 fromFrontMatter :: Aeson.KeyMap.KeyMap Y.Value -> SymMap
 fromFrontMatter = fromYamlMap

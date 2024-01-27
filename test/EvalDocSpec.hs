@@ -31,9 +31,28 @@ expressTags = do
       Eval.eval env doc `shouldBe` (env, "hey, blah")
 
     it "display arrays" $ do
-      let doc = runDocParse' "{{ the_array }}"
-      let env = Map.fromList [(["the_array"], Eval.Array [Eval.Str "one", Eval.Str "two"])]
-      Eval.eval env doc `shouldBe` (env, "[one, two]")
+      let doc =
+            runDocParse'
+              [r|
+{{- small_array }}
+{{ nested_arrays -}}
+|]
+      let env =
+            Map.fromList
+              [
+                ( ["small_array"]
+                , Eval.Array [Eval.Str "one", Eval.Str "two"]
+                )
+              ,
+                ( ["nested_arrays"]
+                , Eval.Array
+                    [ Eval.Array [Eval.Str "three", Eval.Str "four"]
+                    , Eval.Map (Map.fromList [(["x"], Eval.Num 40)])
+                    ]
+                )
+              ]
+      Eval.eval env doc
+        `shouldBe` (env, "one, two\n[three, four], { x: 40 }")
 
     it "display maps" $ do
       let doc = runDocParse' "{{ the_map }}"
@@ -49,11 +68,13 @@ expressTags = do
                           , Eval.Map
                               (Map.fromList [(["key"], Eval.Str "value")])
                           )
+                        , (["arr"], Eval.Array [Eval.Num 3, Eval.Num 2.6])
                         ]
                     )
                 )
               ]
-      Eval.eval env doc `shouldBe` (env, "{ key: value, next_map: { key: value } }")
+      Eval.eval env doc
+        `shouldBe` (env, "key: value, arr: [3, 2.6], next_map: { key: value }")
 
     it "display booleans" $ do
       let doc = runDocParse' "{{ true }} is not {{ x }}"
@@ -124,31 +145,37 @@ unlessTags :: Spec
 unlessTags = do
   describe "Evaluate 'unless' tags" $ do
     it "Unless empty string" $ do
-      let doc = runDocParse' [r|
+      let doc =
+            runDocParse'
+              [r|
 {%- unless page == empty -%}
   <h1>{{ title }}</h1>
   <div>{{ content }}</div>
 {%- endunless -%}
 |]
-      let env = Map.fromList
-                  [ (["page"], Eval.Str "")
-                  , (["title"], Eval.Str "Foo")
-                  , (["content"], Eval.Str "Bar") ]
+      let env =
+            Map.fromList
+              [ (["page"], Eval.Str "")
+              , (["title"], Eval.Str "Foo")
+              , (["content"], Eval.Str "Bar")
+              ]
       Eval.eval env doc
-        `shouldBe`
-        (env, "<h1>Foo</h1>\n  <div>Bar</div>")
+        `shouldBe` (env, "<h1>Foo</h1>\n  <div>Bar</div>")
 
     it "Unless empty array" $ do
-      let doc = runDocParse' [r|
+      let doc =
+            runDocParse'
+              [r|
 {%- unless pages == empty -%}
   <h1>{{ title }}</h1>
   <div>{{ content }}</div>
 {%- endunless -%}
 |]
-      let env = Map.fromList
-                  [ (["pages"], Eval.Array [])
-                  , (["title"], Eval.Str "Foo")
-                  , (["content"], Eval.Str "Bar") ]
+      let env =
+            Map.fromList
+              [ (["pages"], Eval.Array [])
+              , (["title"], Eval.Str "Foo")
+              , (["content"], Eval.Str "Bar")
+              ]
       Eval.eval env doc
-        `shouldBe`
-        (env, "<h1>Foo</h1>\n  <div>Bar</div>")
+        `shouldBe` (env, "<h1>Foo</h1>\n  <div>Bar</div>")
