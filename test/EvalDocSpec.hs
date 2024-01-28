@@ -5,7 +5,7 @@ import qualified Data.HashMap.Lazy as Map
 import qualified EvalDoc as Eval
 import Helpers (runDocParse')
 import qualified ParseDoc as Parse
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec
 import Text.RawString.QQ (r)
 
 spec :: Spec
@@ -92,8 +92,9 @@ ifTags = do
   {{ foo.bar }}
 {%- endif -%}
 |]
-      let env = Map.fromList
-                  [("foo", Eval.Map (Map.fromList [("bar", Eval.Str "baz")]))]
+      let env =
+            Map.fromList
+              [("foo", Eval.Map (Map.fromList [("bar", Eval.Str "baz")]))]
       Eval.eval env doc `shouldBe` (env, "baz")
 
     it "'if' tag (doesn't execute)" $ do
@@ -123,7 +124,7 @@ ifTags = do
 {%- elsif foo -%}
   No, really this happens!
 {%- endif -%}|]
-      let env = Map.fromList [("blah", Eval.Nil), ("foo", Eval.Bool True)]
+      let env = Map.fromList [("blah", Eval.Nil Nothing), ("foo", Eval.Bool True)]
       Eval.eval env doc `shouldBe` (env, "No, really this happens!")
 
     it "'if' with elsif and else" $ do
@@ -139,7 +140,7 @@ ifTags = do
 {%- else -%}
   Oh, at last!
 {%- endif -%}|]
-      let env = Map.fromList [("blah", Eval.Nil), ("foo", Eval.Bool False)]
+      let env = Map.fromList [("blah", Eval.Nil Nothing), ("foo", Eval.Bool False)]
       Eval.eval env doc `shouldBe` (env, "Oh, at last!")
 
 unlessTags :: Spec
@@ -156,7 +157,7 @@ unlessTags = do
 |]
       let env =
             Map.fromList
-              [ ("page", Eval.Str "")
+              [ ("page", Eval.Str "blah")
               , ("title", Eval.Str "Foo")
               , ("content", Eval.Str "Bar")
               ]
@@ -174,7 +175,7 @@ unlessTags = do
 |]
       let env =
             Map.fromList
-              [ ("pages", Eval.Array [])
+              [ ("pages", Eval.Array [Eval.Str "a page"])
               , ("title", Eval.Str "Foo")
               , ("content", Eval.Str "Bar")
               ]

@@ -6,7 +6,7 @@ module ParseDoc (
   Tag (..),
   Expr (..),
   BaseExpr (..),
-  Var,
+  Ident,
   StrLit,
   Number,
   FilterExpr (..),
@@ -27,6 +27,7 @@ import Data.Scientific
 import Data.Text (Text, pack, stripEnd, stripStart)
 import Data.Void (Void)
 import qualified Data.Yaml as Y
+import DocModel
 import Text.Megaparsec hiding (State, empty)
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -64,15 +65,15 @@ data Tag
 data Expr = Expr BaseExpr [FilterExpr]
   deriving (Show, Eq)
 
-data FilterExpr = FilterExpr Ident [BaseExpr]
+data FilterExpr = FilterExpr Symbol [BaseExpr]
   deriving (Show, Eq)
 
 data BaseExpr
-  = ImmVar Var
+  = ImmVar Ident
   | ImmStrLit StrLit
   | ImmNum Number
   | ImmBool Bool
-  | ImmNil
+  | ImmEmpty
   | ExprAnd BaseExpr BaseExpr -- and
   | ExprOr BaseExpr BaseExpr -- or
   | ExprEq BaseExpr BaseExpr -- ==
@@ -87,10 +88,6 @@ data BaseExpr
 type StrLit = Text
 
 type Number = Scientific
-
-type Var = [Ident]
-
-type Ident = Text
 
 -- * Parser setup
 
@@ -209,20 +206,17 @@ pFrontMatter = do
 
 -- ** Immediate expressions
 
-pIdent :: Parser Ident
-pIdent = pIdentInner <&> pack
+pIdentSymbol :: Parser Symbol
+pIdentSymbol = pIdentInner <&> pack
   where
     pIdentInner =
       (:)
         <$> (letterChar <|> char '_') -- [A-Za-z_]
         <*> many (alphaNumChar <|> char '_') -- [A-Za-z0-9_]*
-        <?> "identifier" -- Label
+        <?> "symbol"
 
-pIdents :: Parser [Ident]
-pIdents = sepBy1 pIdent (string ".")
-
-pVar :: Parser Var
-pVar = pIdents
+pIdent :: Parser Ident
+pIdent = sepBy1 pIdentSymbol (string ".") <&> NE.fromList
 
 pScientific :: Parser Scientific
 pScientific = do
@@ -255,8 +249,8 @@ pImmExpr =
   choice $
     try
       <$> [ pBool <&> ImmBool
-          , pEmpty $> ImmNil
-          , pVar <&> ImmVar
+          , pEmpty $> ImmEmpty
+          , pIdent <&> ImmVar
           , pNum <&> ImmNum
           , pStrLit <&> ImmStrLit
           ]
@@ -337,7 +331,7 @@ pBaseExpr = do
 
 pFilterExpr :: Parser FilterExpr
 pFilterExpr = do
-  ident <- pLexeme pIdent
+  ident <- pLexeme pIdentSymbol
   args <- optional . try $ do
     -- Optionally parse filter argument. Once a colon
     -- was seen, at least one argument must follow.

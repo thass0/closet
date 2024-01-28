@@ -5,6 +5,7 @@ import Data.Either (isLeft)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Yaml as Y
+import DocModel
 import Helpers (doc, runDocParse)
 import qualified ParseDoc
 import Test.Hspec
@@ -107,8 +108,11 @@ booleanExpressions = do
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
               ( ParseDoc.ExprAnd
-                  (ParseDoc.ImmVar ["a"])
-                  (ParseDoc.ExprOr (ParseDoc.ImmVar ["b"]) (ParseDoc.ImmVar ["c"]))
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  ( ParseDoc.ExprOr
+                      (ParseDoc.ImmVar (NE.singleton "b"))
+                      (ParseDoc.ImmVar (NE.singleton "c"))
+                  )
               )
               []
           )
@@ -116,12 +120,12 @@ booleanExpressions = do
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
               ( ParseDoc.ExprOr
-                  (ParseDoc.ImmVar ["a"])
+                  (ParseDoc.ImmVar (NE.singleton "a"))
                   ( ParseDoc.ExprAnd
-                      (ParseDoc.ImmVar ["b"])
+                      (ParseDoc.ImmVar (NE.singleton "b"))
                       ( ParseDoc.ExprOr
-                          (ParseDoc.ImmVar ["c"])
-                          (ParseDoc.ImmVar ["d"])
+                          (ParseDoc.ImmVar (NE.singleton "c"))
+                          (ParseDoc.ImmVar (NE.singleton "d"))
                       )
                   )
               )
@@ -134,12 +138,12 @@ booleanExpressions = do
           ( ParseDoc.Expr
               ( ParseDoc.ExprAnd
                   ( ParseDoc.ExprEq
-                      (ParseDoc.ImmVar ["a"])
-                      (ParseDoc.ImmVar ["b"])
+                      (ParseDoc.ImmVar (NE.singleton "a"))
+                      (ParseDoc.ImmVar (NE.singleton "b"))
                   )
                   ( ParseDoc.ExprGt
-                      (ParseDoc.ImmVar ["c"])
-                      (ParseDoc.ImmVar ["d"])
+                      (ParseDoc.ImmVar (NE.singleton "c"))
+                      (ParseDoc.ImmVar (NE.singleton "d"))
                   )
               )
               []
@@ -151,12 +155,12 @@ booleanExpressions = do
           ( ParseDoc.Expr
               ( ParseDoc.ExprOr
                   ( ParseDoc.ExprLeq
-                      ParseDoc.ImmNil
-                      (ParseDoc.ImmVar ["b"])
+                      ParseDoc.ImmEmpty
+                      (ParseDoc.ImmVar (NE.singleton ("b")))
                   )
                   ( ParseDoc.ExprNeq
-                      (ParseDoc.ImmVar ["c"])
-                      (ParseDoc.ImmVar ["d"])
+                      (ParseDoc.ImmVar (NE.singleton "c"))
+                      (ParseDoc.ImmVar (NE.singleton "d"))
                   )
               )
               []
@@ -168,8 +172,8 @@ booleanExpressions = do
           ( ParseDoc.Expr
               ( ParseDoc.ExprAnd
                   ( ParseDoc.ExprContains
-                      (ParseDoc.ImmVar ["a"])
-                      (ParseDoc.ImmVar ["b"])
+                      (ParseDoc.ImmVar (NE.singleton "a"))
+                      (ParseDoc.ImmVar (NE.singleton "b"))
                   )
                   ( ParseDoc.ExprLt
                       (ParseDoc.ImmNum 6)
@@ -187,7 +191,10 @@ booleanExpressions = do
       parseCondition "a and b"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprAnd (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              ( ParseDoc.ExprAnd
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
+              )
               []
           )
 
@@ -195,7 +202,10 @@ booleanExpressions = do
       parseCondition "a or b"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprOr (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              ( ParseDoc.ExprOr
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
+              )
               []
           )
 
@@ -203,7 +213,10 @@ booleanExpressions = do
       parseCondition "a == b"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprEq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              ( ParseDoc.ExprEq
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
+              )
               []
           )
 
@@ -211,7 +224,10 @@ booleanExpressions = do
       parseCondition "a != b"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprNeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              ( ParseDoc.ExprNeq
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
+              )
               []
           )
 
@@ -219,7 +235,10 @@ booleanExpressions = do
       parseCondition "a > b"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprGt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              ( ParseDoc.ExprGt
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
+              )
               []
           )
 
@@ -227,7 +246,10 @@ booleanExpressions = do
       parseCondition "a < b"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprLt (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              ( ParseDoc.ExprLt
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
+              )
               []
           )
 
@@ -235,7 +257,10 @@ booleanExpressions = do
       parseCondition "a >= b"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprGeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmVar ["b"]))
+              ( ParseDoc.ExprGeq
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
+              )
               []
           )
 
@@ -243,7 +268,7 @@ booleanExpressions = do
       parseCondition "a <= true"
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
-              (ParseDoc.ExprLeq (ParseDoc.ImmVar ["a"]) (ParseDoc.ImmBool True))
+              (ParseDoc.ExprLeq (ParseDoc.ImmVar (NE.singleton "a")) (ParseDoc.ImmBool True))
               []
           )
 
@@ -252,8 +277,8 @@ booleanExpressions = do
         `shouldBe` parsedCondition
           ( ParseDoc.Expr
               ( ParseDoc.ExprContains
-                  (ParseDoc.ImmVar ["a"])
-                  (ParseDoc.ImmVar ["b"])
+                  (ParseDoc.ImmVar (NE.singleton "a"))
+                  (ParseDoc.ImmVar (NE.singleton "b"))
               )
               []
           )
@@ -288,10 +313,10 @@ filters = do
           `filterShouldBe` ParseDoc.FilterExpr "times" [ParseDoc.ImmNum (-642)]
       it "'divided_by'" $
         "divided_by: y"
-          `filterShouldBe` ParseDoc.FilterExpr "divided_by" [ParseDoc.ImmVar ["y"]]
+          `filterShouldBe` ParseDoc.FilterExpr "divided_by" [ParseDoc.ImmVar (NE.singleton "y")]
       it "'modulo'" $
         "modulo: site.x"
-          `filterShouldBe` ParseDoc.FilterExpr "modulo" [ParseDoc.ImmVar ["site", "x"]]
+          `filterShouldBe` ParseDoc.FilterExpr "modulo" [ParseDoc.ImmVar ("site" :| ["x"])]
       it "'at_least'" $ do
         "at_least: 19"
           `filterShouldBe` ParseDoc.FilterExpr "at_least" [ParseDoc.ImmNum 19]
@@ -312,12 +337,12 @@ filters = do
           `filterShouldBe` ParseDoc.FilterExpr "append" [ParseDoc.ImmStrLit "World!"]
       it "'concat'" $
         "concat: wowow"
-          `filterShouldBe` ParseDoc.FilterExpr "concat" [ParseDoc.ImmVar ["wowow"]]
+          `filterShouldBe` ParseDoc.FilterExpr "concat" [ParseDoc.ImmVar (NE.singleton "wowow")]
       it "'first'" $ "first" `filterShouldBe` ParseDoc.FilterExpr "first" []
       it "'last'" $ "last" `filterShouldBe` ParseDoc.FilterExpr "last" []
       it "'join'" $
         "join: blah"
-          `filterShouldBe` ParseDoc.FilterExpr "join" [ParseDoc.ImmVar ["blah"]]
+          `filterShouldBe` ParseDoc.FilterExpr "join" [ParseDoc.ImmVar (NE.singleton "blah")]
       it "'reverse'" $ "reverse" `filterShouldBe` ParseDoc.FilterExpr "reverse" []
       it "'sort'" $ "sort" `filterShouldBe` ParseDoc.FilterExpr "sort" []
       it "'sort_natural'" $
@@ -337,8 +362,8 @@ filters = do
         "where: blah, foo"
           `filterShouldBe` ParseDoc.FilterExpr
             "where"
-            [ ParseDoc.ImmVar ["blah"]
-            , ParseDoc.ImmVar ["foo"]
+            [ ParseDoc.ImmVar (NE.singleton "blah")
+            , ParseDoc.ImmVar (NE.singleton "foo")
             ]
 
     describe "String filters" $ do
@@ -355,7 +380,7 @@ filters = do
         "replace: the.string, \"blah\""
           `filterShouldBe` ParseDoc.FilterExpr
             "replace"
-            [ ParseDoc.ImmVar ["the", "string"]
+            [ ParseDoc.ImmVar ("the" :| ["string"])
             , ParseDoc.ImmStrLit "blah"
             ]
       it "'replace_first'" $
@@ -363,11 +388,11 @@ filters = do
           `filterShouldBe` ParseDoc.FilterExpr
             "replace_first"
             [ ParseDoc.ImmStrLit "blah"
-            , ParseDoc.ImmVar ["page", "title"]
+            , ParseDoc.ImmVar ("page" :| ["title"])
             ]
       it "'remove'" $
         "remove: the.string"
-          `filterShouldBe` ParseDoc.FilterExpr "remove" [ParseDoc.ImmVar ["the", "string"]]
+          `filterShouldBe` ParseDoc.FilterExpr "remove" [ParseDoc.ImmVar ("the" :| ["string"])]
       it "'remove_first'" $
         "remove_first: \"blah\""
           `filterShouldBe` ParseDoc.FilterExpr "remove_first" [ParseDoc.ImmStrLit "blah"]
@@ -406,7 +431,7 @@ filters = do
           `filterShouldBe` ParseDoc.FilterExpr
             "truncatewords"
             [ ParseDoc.ImmNum 49
-            , ParseDoc.ImmVar ["my", "ellipse"]
+            , ParseDoc.ImmVar ("my" :| ["ellipse"])
             ]
       it "'date'" $
         "date: \"%a, %b %d, %y\""
@@ -419,7 +444,7 @@ filters = do
     describe "Miscellaneous filters" $ do
       it "'default'" $
         "default: site.title"
-          `filterShouldBe` ParseDoc.FilterExpr "default" [ParseDoc.ImmVar ["site", "title"]]
+          `filterShouldBe` ParseDoc.FilterExpr "default" [ParseDoc.ImmVar ("site" :| ["title"])]
   where
     parsedExpr
       :: ParseDoc.BaseExpr
@@ -434,7 +459,7 @@ filters = do
         )
     filterShouldBe filterString fil =
       runDocParse ("{{ x | " <> filterString <> " }}")
-        `shouldBe` parsedExpr (ParseDoc.ImmVar ["x"]) [fil]
+        `shouldBe` parsedExpr (ParseDoc.ImmVar (NE.singleton "x")) [fil]
 
 -- ** Tests on parsing tags
 
@@ -450,13 +475,13 @@ expressTags = do
   describe "Express tags" $ do
     it "Basic express tags" $ do
       runDocParse "{{ blah.x }}"
-        `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah", "x"])
+        `shouldBe` parsedImmExpr (ParseDoc.ImmVar ("blah" :| ["x"]))
       runDocParse "{{ true }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmBool True)
       runDocParse "{{ false }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmBool False)
       runDocParse "{{ blah.x.y.hello.world }}"
-        `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah", "x", "y", "hello", "world"])
+        `shouldBe` parsedImmExpr (ParseDoc.ImmVar ("blah" :| ["x", "y", "hello", "world"]))
       runDocParse "{{ \"Hello, world!\" }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmStrLit "Hello, world!")
       runDocParse "{{ 543 }}"
@@ -470,8 +495,8 @@ expressTags = do
       runDocParse "{{ 4e-1 }}"
         `shouldBe` parsedImmExpr (ParseDoc.ImmNum 0.4)
       runDocParse "{{blah}}"
-        `shouldBe` parsedImmExpr (ParseDoc.ImmVar ["blah"])
-      runDocParse "{{empty}}" `shouldBe` parsedImmExpr ParseDoc.ImmNil
+        `shouldBe` parsedImmExpr (ParseDoc.ImmVar (NE.singleton "blah"))
+      runDocParse "{{empty}}" `shouldBe` parsedImmExpr ParseDoc.ImmEmpty
     it "Invalid express tags" $ do
       runDocParse "{{ blah!x }}" `shouldSatisfy` isLeft
       runDocParse "{{ blah.x. }}" `shouldSatisfy` isLeft
@@ -482,7 +507,8 @@ expressTags = do
         `shouldBe` Right
           ( doc
               [ ParseDoc.Cont " foo"
-              , ParseDoc.Tag (ParseDoc.TagExpress (ParseDoc.Expr (ParseDoc.ImmVar ["blah"]) []))
+              , ParseDoc.Tag
+                  (ParseDoc.TagExpress (ParseDoc.Expr (ParseDoc.ImmVar (NE.singleton "blah")) []))
               , ParseDoc.Cont "bar "
               ]
           )
@@ -510,7 +536,7 @@ unlessTags = do
 |]
       runDocParse input
         `shouldBe` parsedUnlessTag
-          (ParseDoc.ImmVar ["blah", "x"])
+          (ParseDoc.ImmVar ("blah" :| ["x"]))
           [ParseDoc.Cont "Hey, how are you?\n"]
           [
             ( ParseDoc.ImmBool False
@@ -543,7 +569,7 @@ Mr. White
       runDocParse input
         `shouldBe` ( parsedIfTag
                       ( NE.singleton
-                          ( (ParseDoc.ImmVar ["say_my_name"])
+                          ( (ParseDoc.ImmVar (NE.singleton "say_my_name"))
                           , [ParseDoc.Cont "\nHeisenberg\n"]
                           )
                       )
@@ -564,13 +590,13 @@ Baz
       runDocParse input
         `shouldBe` parsedIfTag
           ( NE.singleton
-              ( (ParseDoc.ImmVar ["blah"])
+              ( (ParseDoc.ImmVar (NE.singleton "blah"))
               ,
                 [ ParseDoc.Cont "\n"
                 , ParseDoc.Tag
                     ( ParseDoc.TagIf
                         ( NE.singleton
-                            ( (immVar ["blah", "x"])
+                            ( (immVar ("blah" :| ["x"]))
                             , [ParseDoc.Cont "\nFoo\n"]
                             )
                         )
@@ -586,17 +612,17 @@ Baz
       runDocParse input2
         `shouldBe` parsedIfTag
           ( NE.singleton
-              ( (ParseDoc.ImmVar ["a"])
+              ( (ParseDoc.ImmVar (NE.singleton "a"))
               ,
                 [ ParseDoc.Tag
                     ( ParseDoc.TagIf
                         ( NE.singleton
-                            ( immVar ["b"]
+                            ( immVar (NE.singleton "b")
                             ,
                               [ ParseDoc.Tag
                                   ( ParseDoc.TagIf
                                       ( NE.singleton
-                                          ( immVar ["c"]
+                                          ( immVar (NE.singleton "c")
                                           , [ParseDoc.Cont "Foo"]
                                           )
                                       )
@@ -642,7 +668,7 @@ Foo
               [ ParseDoc.Tag
                   ( ParseDoc.TagIf
                       ( NE.singleton
-                          ( immVar ["x"]
+                          ( immVar (NE.singleton "x")
                           , [ParseDoc.Cont "\nBlah"]
                           )
                       )
@@ -651,7 +677,7 @@ Foo
               , ParseDoc.Tag
                   ( ParseDoc.TagIf
                       ( NE.singleton
-                          ( immVar ["y"]
+                          ( immVar (NE.singleton "y")
                           , [ParseDoc.Cont "\n Baz"]
                           )
                       )
@@ -675,8 +701,8 @@ Baz
 |]
         runDocParse input
         `shouldBe` parsedIfTag
-          ( (ParseDoc.ImmVar ["x"], [ParseDoc.Cont "Foo"])
-              :| [(ParseDoc.ImmVar ["y"], [ParseDoc.Cont "Bar"])]
+          ( (ParseDoc.ImmVar (NE.singleton "x"), [ParseDoc.Cont "Foo"])
+              :| [(ParseDoc.ImmVar (NE.singleton "y"), [ParseDoc.Cont "Bar"])]
           )
           (Just [ParseDoc.Cont "Baz"])
 
@@ -695,12 +721,12 @@ Four
 |]
       runDocParse input
         `shouldBe` parsedIfTag
-          ( ( ParseDoc.ImmVar ["one"]
+          ( ( ParseDoc.ImmVar (NE.singleton "one")
             , [ParseDoc.Cont "One"]
             )
-              :| [ (ParseDoc.ImmVar ["two"], [ParseDoc.Cont "Two"])
-                 , (ParseDoc.ImmVar ["three"], [ParseDoc.Cont "Three"])
-                 , (ParseDoc.ImmVar ["four"], [ParseDoc.Cont "Four"])
+              :| [ (ParseDoc.ImmVar (NE.singleton "two"), [ParseDoc.Cont "Two"])
+                 , (ParseDoc.ImmVar (NE.singleton "three"), [ParseDoc.Cont "Three"])
+                 , (ParseDoc.ImmVar (NE.singleton "four"), [ParseDoc.Cont "Four"])
                  ]
           )
           Nothing
@@ -712,5 +738,5 @@ Four
     parsedIfTag branches' final =
       let branches = (\(e, b) -> (ParseDoc.Expr e [], b)) <$> branches'
        in Right (doc [ParseDoc.Tag (ParseDoc.TagIf branches final)])
-    immVar :: ParseDoc.Var -> ParseDoc.Expr
+    immVar :: Ident -> ParseDoc.Expr
     immVar v = ParseDoc.Expr (ParseDoc.ImmVar v) []

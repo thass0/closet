@@ -1,5 +1,3 @@
-{-# LANGUAGE InstanceSigs #-}
-
 module EvalDoc (
   Env,
   empty,
@@ -15,57 +13,86 @@ import Data.List (find)
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (isJust)
 import Data.Scientific
-import Data.Text (Text, intercalate, isInfixOf, pack, unpack)
+import Data.Text (Text, intercalate, isInfixOf, pack)
 import qualified Data.Vector as Vector (toList)
 import qualified Data.Yaml as Y
+import DocModel
 import ParseDoc hiding (empty)
 
 data Value
   = Str Text
   | Num Scientific
   | Array [Value]
-  | Map SymMap
+  | Map SymbolMap
   | Bool Bool
-  | Nil
   | Empty
-  deriving (Show)
+  | Nil (Maybe Ident)
+  deriving (Show, Eq)
 
-type Env = SymMap
+type SymbolMap = Map.HashMap Symbol Value
 
-type SymMap = Map.HashMap Symbol Value
-
-type Symbol = Text
+type Env = SymbolMap
 
 empty :: Env
 empty = Map.empty
 
-instance Eq Value where
-  (==) :: Value -> Value -> Bool
-  v1 == v2 =
-    case (v1, v2) of
-      (Array a, Empty) -> null a
-      (Empty, Array a) -> null a
-      (Str s, Empty) -> s == ""
-      (Empty, Str s) -> s == ""
-      (Str s1, Str s2) -> s1 == s2
-      (Num n1, Num n2) -> n1 == n2
-      (Array a1, Array a2) -> a1 == a2
-      (Map m1, Map m2) -> m1 == m2
-      (Bool b1, Bool b2) -> b1 == b2
-      (Nil, Nil) -> True
-      (Empty, Empty) -> True
-      _ -> False
+showNil :: Maybe Ident -> String
+showNil (Just i) = "nil of '" ++ showIdent i ++ "'"
+showNil Nothing = "nil"
 
-instance Ord Value where
-  (<=) :: Value -> Value -> Bool
-  v1 <= v2 =
-    case (v1, v2) of
-      (Str s1, Str s2) -> s1 <= s2
-      (Num n1, Num n2) -> n1 <= n2
-      (Array a1, Array a2) -> length a1 <= length a2
-      (Map m1, Map m2) -> length m1 <= length m2
-      (Bool b1, Bool b2) -> not (b1 && not b2)
-      (_, _) -> error "cannot compare types"
+isEqual :: Value -> Value -> Bool
+isEqual v1 v2 =
+  case (v1, v2) of
+    (Array a, Empty) -> null a
+    (Empty, Array a) -> null a
+    (Str s, Empty) -> s == ""
+    (Empty, Str s) -> s == ""
+    (Str s1, Str s2) -> s1 == s2
+    (Num n1, Num n2) -> n1 == n2
+    (Array a1, Array a2) -> a1 == a2
+    (Map m1, Map m2) -> m1 == m2
+    (Bool b1, Bool b2) -> b1 == b2
+    (Nil ident, _) -> nilErr ident
+    (_, Nil ident) -> nilErr ident
+    (Empty, Empty) -> True
+    _ -> False
+  where
+    nilErr ident = error $ "cannot compare to " ++ showNil ident
+
+isNotEqual :: Value -> Value -> Bool
+isNotEqual a b = not (isEqual a b)
+
+isLessEqual :: Value -> Value -> Bool
+isLessEqual v1 v2 =
+  case (v1, v2) of
+    (Str s1, Str s2) -> s1 <= s2
+    (Num n1, Num n2) -> n1 <= n2
+    (Array a1, Array a2) -> length a1 <= length a2
+    (Map m1, Map m2) -> length m1 <= length m2
+    (Bool b1, Bool b2) -> not (b1 && not b2)
+    (Nil ident, _) -> nilErr ident
+    (_, Nil ident) -> nilErr ident
+    (_, _) -> error "cannot order types"
+  where
+    nilErr ident = error $ "cannot order compared to " ++ showNil ident
+
+isLess :: Value -> Value -> Bool
+isLess a b = isNotEqual a b && isLessEqual a b
+
+isGreaterEqual :: Value -> Value -> Bool
+isGreaterEqual a b = isEqual a b || not (isLessEqual a b)
+
+isGreater :: Value -> Value -> Bool
+isGreater a b = not (isLessEqual a b)
+
+-- Evaluate the truthiness of a given value.
+isTruthy :: Value -> Bool
+isTruthy v =
+  case v of
+    Bool b -> b
+    Nil _ -> False
+    -- Empty string, empty array, and 0 are truthy, too.
+    _ -> True
 
 eval :: Env -> Doc -> (Env, Text)
 eval env' doc =
@@ -118,7 +145,7 @@ evalExpr env (Expr base filters) =
         ImmStrLit str -> Str str
         ImmNum num -> Num num
         ImmBool b -> Bool b
-        ImmNil -> Nil
+        ImmEmpty -> Empty
         ExprAnd a b ->
           if isTruthy (evalBase a)
             then Bool (isTruthy (evalBase b))
@@ -127,30 +154,29 @@ evalExpr env (Expr base filters) =
           if isTruthy (evalBase a)
             then Bool True
             else Bool (isTruthy (evalBase b))
-        ExprEq a b -> Bool (evalBase a == evalBase b)
-        ExprNeq a b -> Bool (evalBase a /= evalBase b)
-        ExprGt a b -> Bool (evalBase a > evalBase b)
-        ExprLt a b -> Bool (evalBase a < evalBase b)
-        ExprGeq a b -> Bool (evalBase a >= evalBase b)
-        ExprLeq a b -> Bool (evalBase a <= evalBase b)
+        ExprEq a b -> Bool $ isEqual (evalBase a) (evalBase b)
+        ExprNeq a b -> Bool $ isNotEqual (evalBase a) (evalBase b)
+        ExprGt a b -> Bool $ isGreater (evalBase a) (evalBase b)
+        ExprLt a b -> Bool $ isLess (evalBase a) (evalBase b)
+        ExprGeq a b -> Bool $ isGreaterEqual (evalBase a) (evalBase b)
+        ExprLeq a b -> Bool $ isLessEqual (evalBase a) (evalBase b)
         ExprContains a b ->
           case (evalBase a, evalBase b) of
             (Str super, Str sub) -> Bool (sub `isInfixOf` super)
             (Array strs, str) -> Bool (isJust (find (== str) strs))
             _ -> error "'contains' can only find substrings and strings in arrays"
- 
+
     -- Lookup a variable in a map.
-    lookupVar :: SymMap -> [Symbol] -> Value
+    lookupVar :: SymbolMap -> Ident -> Value
     lookupVar symMap path =
-      case lookupVarInner symMap path of 
+      case lookupVarInner symMap (NE.toList path) of
         Just v -> v
-        Nothing ->
-              error $ "symbol lookup error: no variable called '" <> showPath path <> "' exists"
+        Nothing -> Nil (Just path)
       where
-        lookupVarInner :: SymMap -> [Symbol] -> Maybe Value
+        lookupVarInner :: SymbolMap -> [Symbol] -> Maybe Value
         lookupVarInner m [p] = Map.lookup p m
-        lookupVarInner m (p:ps) =
-          case Map.lookup p m of 
+        lookupVarInner m (p : ps) =
+          case Map.lookup p m of
             Just (Map m') -> lookupVarInner m' ps
             x -> x
         lookupVarInner _ [] = Nothing
@@ -166,18 +192,6 @@ evalExpr env (Expr base filters) =
           (Num vn, ImmNum sn) -> Num (vn + sn)
           _ -> error "type error in 'sum'"
         _ -> error "filter not yet implemented"
-
--- Evaluate the truthiness of a given value.
-isTruthy :: Value -> Bool
-isTruthy v =
-  case v of
-    Bool b -> b
-    Nil -> False
-    -- Empty string, empty array, and 0 are truthy, too.
-    _ -> True
-
-showPath :: [Symbol] -> String
-showPath s = unpack $ intercalate "." s
 
 -- Convert a value to a literal string that can be
 -- added to the output document.
@@ -201,12 +215,12 @@ literal tlv =
         Bool True -> "true"
         Bool False -> "false"
         Empty -> ""
-        Nil -> ""
+        Nil ident -> error $ showNil ident ++ " has no value"
 
-    literalMap :: SymMap -> [Text]
+    literalMap :: SymbolMap -> [Text]
     literalMap = map (\(k, v') -> k <> ": " <> literal' v') . Map.toList
 
-fromFrontMatter :: Aeson.KeyMap.KeyMap Y.Value -> SymMap
+fromFrontMatter :: Aeson.KeyMap.KeyMap Y.Value -> SymbolMap
 fromFrontMatter = fromYamlMap
   where
     fromYaml :: Y.Value -> Value
@@ -217,9 +231,9 @@ fromFrontMatter = fromYamlMap
         Y.String s -> Str s
         Y.Number n -> Num n
         Y.Bool b -> Bool b
-        Y.Null -> Nil
+        Y.Null -> Empty
 
-    fromYamlMap :: Aeson.KeyMap.KeyMap Y.Value -> SymMap
+    fromYamlMap :: Aeson.KeyMap.KeyMap Y.Value -> SymbolMap
     fromYamlMap a = Map.fromList (map f (Aeson.KeyMap.toList a))
       where
         f (k, v) = (Aeson.Key.toText k, fromYaml v)
