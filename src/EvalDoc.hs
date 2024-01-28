@@ -11,7 +11,7 @@ import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.HashMap.Lazy as Map
 import Data.List (find)
 import qualified Data.List.NonEmpty as NE
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, mapMaybe)
 import Data.Scientific
 import Data.Text (Text, intercalate, isInfixOf, pack)
 import qualified Data.Vector as Vector (toList)
@@ -188,10 +188,25 @@ evalExpr env (Expr base filters) =
         ("times", [s]) -> case (v, s) of
           (Num vn, ImmNum sn) -> Num (vn * sn)
           _ -> error "type error in 'times'"
-        ("sum", [s]) -> case (v, s) of
+        ("plus", [s]) -> case (v, s) of
           (Num vn, ImmNum sn) -> Num (vn + sn)
+          _ -> error "type error in 'plus'"
+        ("sum", [s]) -> case (v, s) of
+          (Array a, ImmStrLit field) ->
+            Num $ sum $ mapMaybe ((onlyNums <$>) . Map.lookup field . onlyMaps) a
+          _ -> error "type error in 'sum'"
+        ("sum", []) -> case v of
+          (Array a) -> Num $ sum $ map onlyNums a
           _ -> error "type error in 'sum'"
         _ -> error "filter not yet implemented"
+      where
+        onlyMaps :: Value -> SymbolMap
+        onlyMaps (Map m) = m
+        onlyMaps _ = error "'sum' expected a map"
+
+        onlyNums :: Value -> Scientific
+        onlyNums (Num n) = n
+        onlyNums _ = error "'sum' expected a number"
 
 -- Convert a value to a literal string that can be
 -- added to the output document.

@@ -2,6 +2,7 @@ module EvalDocSpec (spec) where
 
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import qualified Data.HashMap.Lazy as Map
+import Data.Text
 import qualified EvalDoc as Eval
 import Helpers (runDocParse')
 import qualified ParseDoc as Parse
@@ -14,6 +15,7 @@ spec = do
     ifTags
     unlessTags
     expressTags
+    filters
     it "Simple eval" $ do
       Eval.eval Map.empty (Parse.Doc (Aeson.KeyMap.fromList [("key", "value")]) [])
         `shouldBe` (Map.fromList [("key", Eval.Str "value")], "")
@@ -181,3 +183,38 @@ unlessTags = do
               ]
       Eval.eval env doc
         `shouldBe` (env, "<h1>Foo</h1>\n  <div>Bar</div>")
+
+filters :: Spec
+filters = do
+  describe "Evaluate filters" $ do
+    it "'times'" $ do
+      evalDefault "{{ 5 | times: 5 }}"
+        `shouldBe` (Map.empty, "25")
+    it "'plus'" $ do
+      evalDefault "{{ 7 | plus: 1 }}"
+        `shouldBe` (Map.empty, "8")
+      evalDefault "{{ 3.41 | plus: 15 }}"
+        `shouldBe` (Map.empty, "18.41")
+    it "'sum'" $ do
+      let doc = runDocParse' "{{ arr | sum: \"blah\" }} {{ another_arr | sum }}"
+      let env =
+            Map.fromList
+              [
+                ( "arr"
+                , Eval.Array
+                    [ Eval.Map $ Map.fromList [("blah", Eval.Num 5)]
+                    , Eval.Map $ Map.fromList [("blah", Eval.Num 9)]
+                    ]
+                )
+              ,
+                ( "another_arr"
+                , Eval.Array
+                    [Eval.Num 1, Eval.Num 5, Eval.Num 9]
+                )
+              ]
+      Eval.eval env doc
+        `shouldBe` (env, "14 15")
+  where
+    evalDefault :: Text -> (Eval.Env, Text)
+    evalDefault i =
+      Eval.eval Map.empty (runDocParse' i)
